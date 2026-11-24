@@ -18,7 +18,7 @@ changelog:
     change: 审批门下线 — 评估通过即纳入调度，创建回执卡片无按钮；删除「须管理员审批」「不承诺马上生效」等口径
   - version: 1.5.0
     date: 2026-11-06
-    change: 执行方口径改为「技能目录里可路由的能力」，默认 aihot — 消息链路已迁 dsh，rwa-bot 不在 dsh 会话里（routable=false），写它等于把任务批给一个到点不存在的执行方
+    change: 执行方口径改为「技能目录里可路由的能力」，默认 aihot — 消息链路已迁 dsh，通用 Agent 不在 dsh 会话里（routable=false），写它等于把任务批给一个到点不存在的执行方
   - version: 1.4.0
     date: 2026-10-12
     change: depends_on 增 shared/self-check — 输出前自评，取代独立 judge 判定

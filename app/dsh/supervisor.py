@@ -61,7 +61,7 @@ def _expand_env(env: Any) -> list[dict[str, str]]:
     ACP 的 env 是**条目数组**而不是字典，直接传 dict 会被当成空列表：子进程
     也就拿不到任何数据源凭据，表现为 MCP 服务起来后立刻退出（`Missing required
     environment variables`）。未定义的变量置空而不是留下字面量——保留
-    `${NACOS_USERNAME}` 只会让失败更难看出来。
+    `${EXAMPLE_USERNAME}` 只会让失败更难看出来。
     """
     if not isinstance(env, dict):
         return []
@@ -332,7 +332,7 @@ class DshSupervisor:
           （Windows 上 venv 常只在 bot 的激活脚本里生效），裸 `python` 会挂到
           一个没有本仓依赖的解释器上，表现出来只是「模型说没有这个工具」。
         - env 里的 `${VAR}` 在这里展开。dsh 不替 MCP 子进程做占位符替换，留着
-          原样传下去等于把字面量 `${NACOS_USERNAME}` 当用户名。
+          原样传下去等于把字面量 `${EXAMPLE_USERNAME}` 当用户名。
         - Windows 上 `npx` / `npm` 是 `.cmd`，MCP 客户端直接 CreateProcess 找不到
           它们，只会看到「服务起不来」。这里解析成绝对路径的 node 入口。
 

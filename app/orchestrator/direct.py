@@ -29,7 +29,7 @@ DIRECT_ANSWER_SYSTEM_PROMPT = PromptLoader.load(
 )
 
 # 短输入阈值：≤该长度且有路由模型 reply 时直接用 reply（秒回路径）。
-# 中文问候/感谢/告别基本 ≤6 字；阈值过高会把短问题（如"RWA是什么？"）
+# 中文问候/感谢/告别基本 ≤6 字；阈值过高会把短问题（如"缓存是什么？"）
 # 误判为闲聊，用路由模型顺手写的低质量 reply 作答。
 _GREETING_MAX_LEN = 8
 

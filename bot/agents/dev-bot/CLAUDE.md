@@ -95,7 +95,7 @@ inject_sender 注入：[cc-connect sender_id={open_id} sender_name="{名}" platf
 
 | 触发条件 | 写入位置 |
 |---------|---------|
-| 发现新表结构/字段含义 | `_global/mysql-schema.md` |
+| 发现新数据源结构/字段含义 | `_global/schema.md` |
 | 解决配置踩坑/报错 | `_global/pitfalls.md` |
 | 用户明确表达偏好/习惯 | `users/{open_id}/prefs.md` |
 | 群内首次讨论某业务话题 | `groups/{chat_id}/context.md` |

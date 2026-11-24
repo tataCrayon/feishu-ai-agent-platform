@@ -105,7 +105,7 @@ def build_done_card(task_id: str, positive: bool, operator: str = "") -> dict[st
 def is_feedback_action(event: Any) -> bool:
     """是不是我们这张反馈卡的点击。
 
-    卡片回调会广播给所有注册的 handler（能力审批、PRD、定时任务），每个都得
+    卡片回调会广播给所有注册的 handler（能力审批、定时任务、通知），每个都得
     自己判断「这条是不是我的」。判据只看 value 里的 `fb` 键——不认识就静默让过。
     """
     value = _action_value(event)

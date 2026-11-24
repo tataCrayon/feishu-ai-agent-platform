@@ -56,7 +56,7 @@
 |------|---|-----|:---:|------|
 | `digital-oracle-agent.json` | 静态 | agents/digital-oracle-agent.md | 6 | 1.0.0 |
 | `direct-answer.json` | 静态 | router/direct_answer_system_prompt.md | 6 | 1.0.0 |
-| `router-intent.json` | 行为级 | router/system_prompt.md | 31 | 3.0 |
+| `router-intent.json` | 行为级 | router/system_prompt.md | 31 | 3.1 |
 | `router-system.json` | 静态 | router/system_prompt.md | 3 | 1.2.0 |
 | `safety-rules.json` | 静态 | shared/safety-rules | 12 | 2.1 |
 | `schedule-agent.json` | 静态 | agents/schedule-agent.md | 12 | 1.2.0 |

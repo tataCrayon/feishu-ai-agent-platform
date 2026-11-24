@@ -44,8 +44,8 @@ def _resolve_lark_cli() -> str:
     """定位 lark-cli 入口：**优先 node + run.js 直调，回退 .cmd**。
 
     为什么不用 `.cmd`：`create_subprocess_exec` 起 `.cmd` 会经 `cmd.exe`，
-    而 cmd 把 `&` `|` `<` `>` 当命令分隔符——`minutes +search --query "钱包管理&钱包绑定"`
-    会被切成两条命令，报「'钱包管理' 不是内部或外部命令」，看起来像搜索无结果。
+    而 cmd 把 `&` `|` `<` `>` 当命令分隔符——`minutes +search --query "方案&评审"`
+    会被切成两条命令，报「'方案' 不是内部或外部命令」，看起来像搜索无结果。
     直调 `node run.js` 绕开 shell，参数原样传递。
     """
     node = shutil.which("node") or shutil.which("node.exe")

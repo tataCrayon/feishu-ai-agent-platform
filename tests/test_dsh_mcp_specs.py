@@ -25,10 +25,10 @@ def _supervisor(*servers: dict) -> DshSupervisor:
 
 def test_env_expands_placeholder_from_process_env(monkeypatch) -> None:
     monkeypatch.setenv("TEST_MCP_USER", "alice")
-    entries = _expand_env({"NACOS_USERNAME": "${TEST_MCP_USER}", "NACOS_HOST": "h:8848"})
+    entries = _expand_env({"EXAMPLE_USERNAME": "${TEST_MCP_USER}", "EXAMPLE_HOST": "h:8848"})
     assert {e["name"]: e["value"] for e in entries} == {
-        "NACOS_USERNAME": "alice",
-        "NACOS_HOST": "h:8848",
+        "EXAMPLE_USERNAME": "alice",
+        "EXAMPLE_HOST": "h:8848",
     }
 
 
@@ -57,8 +57,8 @@ def test_spec_shape_matches_acp_contract() -> None:
     sup = _supervisor(
         {"name": "domains", "args": ["-m", "app.mcp.domains_server"],
          "env": {"PYTHONPATH": "/repo"}},
-        {"name": "mysql", "command": "npx", "args": ["-y", "easy-mysql-mcp"],
-         "env": {"MYSQL_HOST": "h"}},
+        {"name": "demo", "command": "npx", "args": ["-y", "demo-mcp"],
+         "env": {"EXAMPLE_HOST": "h"}},
     )
     for spec in sup.mcp_server_specs():
         assert isinstance(spec["env"], list)

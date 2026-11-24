@@ -637,7 +637,7 @@ footer {
     <div class="panel">
       <div class="panel-title"><span class="dot purple"></span> Claude Code 通道费用 <span class="tag">~/.claude/projects 转录聚合</span></div>
       <div style="font-size:0.68rem;color:var(--text-muted);margin:0.35rem 0 0.6rem;">
-        rwa-bot 经 cc-connect 执行时烧的 token 不在任务档案里（编排层费用只含路由/直答）。此处从 Claude Code 本地转录按天聚合，与 aigw 账单对账用。
+        cc-connect 通道执行时烧的 token 不在任务档案里（编排层费用只含路由/直答）。此处从 Claude Code 本地转录按天聚合，与 aigw 账单对账用。
       </div>
       <div id="ccUsageBox"><div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">加载中…</div></div></div>
     </div>
@@ -757,9 +757,9 @@ let _dashboardData = null, _behaviorData = null;
 // agent id → 用户视角名（与后端 _ROUTE_LABELS 同口径）
 const AGENT_LABELS = {
   'db-agent': '数据库查询（已下线）',
-  'daily-agent': '技术日报', 'webportal-agent': '工单系统',
-  'rwa-bot': 'RWA 业务助手',
-  'skill-elk-log-query': 'ELK 日志查询', 'skill-order-sql': '工单→SQL',
+  'daily-agent': '技术日报', 'schedule-agent': '定时任务',
+  'dev-bot': '开发助手',
+  'skill-aihot': 'AI 资讯', 'skill-demo-guard': '项目巡检',
   'skill-demo-guard': '项目巡检', 'skill-x': '占位技能',
   'direct-answer': '直接自答', 'langgraph_router': '智能路由', 'help': '能力介绍', 'clarify': '反问澄清'
 };

@@ -1,7 +1,7 @@
 {
   "ref": "router/system_prompt.md",
-  "version": "3.0",
-  "description": "意图识别行为级回归 — 真实调用 RouterLLM，验证消息 → 实际路由工具（与 router-system.json 静态编码检查互补）；v2 扩充实际功能/否定/英文/多意图用例；v2.4 钉能力盘点→help 与技能治理→skill-catalog 分流；v2.5 动静结合——团队资产盘点（我们/团队+Skill/Agent 字样）→ skill-catalog（本地快照毫秒级），第二人称自我介绍仍归 help；v2.7 移除 feishu-doc-agent 正向用例（知识库查询移交飞书豆包），保留 approval-negative 文档链路负向守卫；v2.8 +3 例 easyprd 手动入口（状态/催识别/能力问询）→ prd-watch-agent；v2.9 +4 例 CMDB 工单提醒订阅（订阅/盯发布单/查订阅/退订）→ cmdb-watch-agent；v3.0 +4 例 指定工单关注（关注单号/贴链接/查关注/取消关注）→ cmdb-watch-agent",
+  "version": "3.1",
+  "description": "意图识别行为级回归 — 真实调用 RouterLLM，验证消息 → 实际路由工具（与 router-system.json 静态编码检查互补）；覆盖功能问询 / 否定句 / 英文 / 多意图 / 能力盘点与技能治理分流 / 含糊澄清",
   "cases": [
     {
       "input": "今天有什么技术动态和 AI 新闻",

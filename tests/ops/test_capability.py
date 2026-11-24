@@ -82,7 +82,7 @@ def test_scan_env_placeholder_not_flagged(tmp_path):
         "  demo:\n"
         "    command: npx\n"
         "    env:\n"
-        "      MYSQL_PASSWORD: ${MYSQL_PASSWORD}\n",
+        "      EXAMPLE_TOKEN: ${EXAMPLE_TOKEN}\n",
         encoding="utf-8",
     )
     report = CapabilityScanner().scan(pkg)

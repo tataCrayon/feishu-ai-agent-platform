@@ -14,7 +14,7 @@
 | Q3 | `agent.yaml` 保留字段：`name/display_name/description/permission_level/enabled` | 已定 | P2 |
 | Q4 | 迁移窗口：允许停机 10 分钟/阶段 | 已定 | 各阶段切换 |
 | Q5 | memory 与 bot 一体（不再独立进程） | 已定 | P5 |
-| Q6 | 并行冲突：`app/domains/prd_watch`、`cmdb_watch` 由另一方持续开发 | 需确认边界 | P3/P5 |
+| Q6 | 业务域（`app/domains/*`）由能力 Owner 并行开发 | 只改调用入口 | P3/P5 |
 
 **Q6 边界**：`app/domains/*` 属**业务域**，
 本次重构只改它们的**调用入口**（handler → MCP 工具），不改域内逻辑。

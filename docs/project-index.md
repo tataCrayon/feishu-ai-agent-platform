@@ -201,7 +201,7 @@
   这是**环境问题非回归**——先与 HEAD 基线对比确认 403 数量一致，再找网关管理员加白
 - 凭据单源：`.env`（FEISHU_APP_SECRET / CC_WEBHOOK_TOKEN / LLM_API_KEY / AIGW_API_KEY，其余按需追加）；
   `config.toml` 与 `bot/agents/*/agent.yaml` 一律写 `${ENV_NAME}` 占位符或留空，运行时由 `load_config`/generator 从环境展开
-- 内网网关需绕代理：`NO_PROXY="aigw.example.com,cmdb.example.com"`（Git Bash 下起进程时）
+- 内网网关需绕代理：`NO_PROXY="aigw.example.com"`（Git Bash 下起进程时）
 - cc-connect 侧 Claude 模型按各 agent.yaml 的 `model:` 声明（sonnet/haiku）
 
 ## 独立部署（bot + MemoryCore 上服务器）

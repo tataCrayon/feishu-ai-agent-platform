@@ -59,7 +59,7 @@ app/domains/       业务域（daily / skill_catalog …）← 不允许反向�
 
 ## 六、日志
 
-- `logging.getLogger("<面>.<模块>")`，如 `dsh.adapter`、`mcp.feishu`、`domains.prd_watch`。
+- `logging.getLogger("<面>.<模块>")`，如 `dsh.adapter`、`mcp.feishu`、`domains.daily`。
 - **INFO 写状态变化，DEBUG 写过程细节**。循环里的每轮采样用 DEBUG。
 - 禁止在日志里打印凭据、完整报文、用户原文（原文超 200 字截断）。
 

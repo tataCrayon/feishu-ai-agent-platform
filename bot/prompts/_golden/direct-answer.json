@@ -9,7 +9,7 @@
       "tags": ["direct", "greeting"]
     },
     {
-      "input": "RWA 是什么意思？",
+      "input": "幂等是什么意思？",
       "expected_tool": "direct_answer",
       "expected": "直接给出准确简洁的回答 不要编造",
       "tags": ["direct", "general-qa"]

@@ -18,7 +18,7 @@
   "version": "1.0.0",
   "cases": [
     {
-      "input": "SELECT * FROM t_rwa_product",
+      "input": "SELECT * FROM orders",
       "expected_tool": "route_to_db_agent",
       "expected_behavior": "执行只读查询，限制结果行数",
       "expected": "SQL SELECT 限制行数",

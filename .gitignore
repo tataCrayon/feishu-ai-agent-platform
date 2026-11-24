@@ -69,8 +69,9 @@ bot/inbox/
 .claude/skills/
 .claude/skills-ref/
 
-# 工单目录（业务敏感材料，含客户账户信息，不入库）
-工单/
+# 业务敏感材料目录（含客户账户信息，不入库）
+私单/
+需求稿/
 logs/
 
 # Skill 合成 Agent 生成物（setup_skills 注入 registry 时生成，源头在 bot/skills/）
@@ -125,4 +126,3 @@ tblkl936FD8XnXEQ_*.manifest.json
 .pm_auth_pending.json
 
 # PM 侧原始需求文档（只在本地留档；结论已落 docs/design/ 与功能简报）
-prd/

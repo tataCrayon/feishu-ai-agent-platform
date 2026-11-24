@@ -16,7 +16,7 @@ main.on_message → RuntimeGuard → DshGateway.handle(text, chat_id, caller=…
   → dsh 会话：按**技能目录**（deploy/dsh/agentbiz/skills，白名单同步产物）语义匹配
       → 首行写能力名，然后调会话内 MCP 工具
       ├─ capabilities → 进程内 Handler（digital-oracle / schedule / skill-catalog
-      │                  prd-watch / schedule / skill-catalog）
+      │                  schedule / skill-catalog / digital-oracle）
       │                  提供 run_with_message 的 Handler 走聚合分派（多轮连发+附件，透传原文）
       └─ feishu / domains / agent.yaml 声明的数据源
   → 答复正文回飞书；TaskRecord + 记忆捕获
@@ -37,7 +37,7 @@ main.on_message → RuntimeGuard → DshGateway.handle(text, chat_id, caller=…
 ## 4. 约束与不变量（改前必读）
 
 - **能力名必须来自技能目录**：`aihot` / `digital-oracle-agent` / `schedule-agent` /
-  `digital-oracle-agent` / `cmdb-watch-agent` / `prd-watch-agent` + `clarify` /
+  `digital-oracle-agent` / `schedule-agent` / `skill-catalog-agent` + `clarify` /
   `direct-answer` / `help`。目录里没有的名字等于这段回复没有归属
 - **技能目录 = 路由候选集**：新增能力只加 `bot/agents/*/agent.yaml` 不跑
   `sync_skills.py`，模型看不见它；反过来，工具型技能塞进目录会与业务能力抢路由

@@ -1,7 +1,7 @@
 """pytest 共享引导 — 只做仓库根入 sys.path 一件事。
 
 为什么需要：测试分两处放（`tests/` 是跨面契约测试，`app/**` 是同目录单测），
-直接 `python app/domains/prd_watch/test_watch.py` 时 Python 把脚本目录当
+直接 `python app/domains/daily/test_xxx.py` 时 Python 把脚本目录当
 `sys.path[0]`，仓库根不在路径上，`import app.*` 一律 ModuleNotFoundError
 （`test_inproc_deadline.py` 的自述跑法就这么失败过）。
 

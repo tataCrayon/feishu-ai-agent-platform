@@ -25,7 +25,7 @@ changelog:
     change: depends_on 增 shared/self-check — 输出前自评，取代独立 judge 判定
   - version: 2.9.0
     date: 2026-09-29
-    change: /dev 秒回清单去掉已下线的能力，补上数字先知与团队 Skill 目录；能力与仓库改指团队仓真实 Skill 名，不再写 mysql-guard Agent / cmdb-guard Agent
+    change: /dev 秒回清单去掉已下线的能力，补上数字先知与团队 Skill 目录；能力与仓库改指团队仓真实 Skill 名，不再写具体 Agent 名
   - version: 2.8.0
     date: 2026-09-25
     change: depends_on 新增 shared/persona 人格基座（minor，不破坏缓存前缀）
@@ -40,7 +40,7 @@ changelog:
     change: 自我介绍改「团队数字助手」、去 AgentMate/🧠；秒回清单改为简短能力列表（与 _help_node 单行格式对齐）
   - version: 2.4.0
     date: 2026-09-13
-    change: 秒回自我介绍与 _help_node 对齐 — 去除已下线的斜杠命令清单，改为自然语言能力分组（与编排层分组一致），示例句对齐当前真实能力（ELK 日志/工单转SQL/日报）
+    change: 秒回自我介绍与 _help_node 对齐 — 去除已下线的斜杠命令清单，改为自然语言能力分组（与编排层分组一致），示例句对齐当前真实能力
   - version: 2.3.0
     date: 2026-08-14
     change: 新增角色路由规则（[role=xxx] 前缀切换模式）

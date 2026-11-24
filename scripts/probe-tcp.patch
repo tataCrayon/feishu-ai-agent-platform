@@ -25,7 +25,7 @@ index d71e526..63b089a 100644
      start = time.time()
 -    ok = await monitor._cc_client.fire_and_forget(
 -        prompt="ping",
--        project=(agent.cc_project or "rwa-bot"),
+-        project=(agent.cc_project or "dev-bot"),
 -        session_key=f"feishu:health:{agent.name}",
 -    )
 +    host, port = _cc_connect_endpoint(monitor)

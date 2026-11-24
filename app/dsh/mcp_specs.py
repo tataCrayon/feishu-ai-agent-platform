@@ -15,7 +15,7 @@
 ## 两条来源都要收
 
 `[projects.mcp]` 是本仓自己实现的能力面（飞书 / 业务域 / 能力执行入口）；
-各 agent 的 `agent.yaml` 是它自己声明的数据源（MySQL / CMDB / Nacos）。前者漏挂
+各 agent 的 `agent.yaml` 是它自己声明的数据源。前者漏挂
 等于能力没有手，后者漏挂等于把数据源摘掉——两种都表现为「模型说没有这个工具」，
 不会报错。
 
@@ -94,7 +94,7 @@ def dsh_mcp_specs(mcp_cfg: Any, agents: list[Any] | None = None) -> list[dict[st
 
     环境变量直接展开成实际值：dsh 只按自己声明的字段拼子进程环境，不继承
     bot 进程的 env，也不做 `${VAR}` 替换——不展开的话，MCP 子进程拿到的会是
-    `${NACOS_USERNAME}` 这样的字面量，登录失败却看不出原因。
+    `${EXAMPLE_USERNAME}` 这样的字面量，登录失败却看不出原因。
     `PYTHONPATH` 显式指向仓库根：工具子进程不一定从仓库根启动，靠它自己猜
     `app.*` 的位置会 ImportError，表现为「工具根本没注册上」而不是报错。
     """
@@ -138,7 +138,7 @@ def dsh_mcp_specs(mcp_cfg: Any, agents: list[Any] | None = None) -> list[dict[st
             if name in seen or not isinstance(raw, dict):
                 continue
             # 同名 server 只挂一次：agent.yaml 里同一个 MCP 在多个 agent 间复用
-            # （如三处都写 cmdb），重复挂载会让工具出现两份、模型来回挑。
+            # （如三处都写同一个名字），重复挂载会让工具出现两份、模型来回挑。
             seen.add(name)
             spec = dict(raw)
             spec["name"] = name

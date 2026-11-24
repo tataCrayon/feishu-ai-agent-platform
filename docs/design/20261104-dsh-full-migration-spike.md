@@ -25,7 +25,7 @@ session/update    → agent_thought_chunk / tool_call / tool_call_update / agent
 
 | 技能可见范围 | 通过率 | 失败特征 |
 |---|---|---|
-| dsh 默认根（个人 40+ 技能 + 项目 11 个） | 80.3% | 抢答到 `cmdb-order-tracker` / `code-concept-tracer` / `mysql-guard` 等**同名近义的个人技能** |
+| dsh 默认根（个人 40+ 技能 + 项目 11 个） | 80.3% | 抢答到个人目录里**同名近义**的技能 |
 | 关默认根，但项目目录残留旧技能 | 89.5% | 不再被个人技能抢，但仍命中废弃技能 |
 | `includeDefaultRoots: false` + **仅项目 11 个业务技能** | **94.7%** | 失败集中在 direct-answer / clarify 边界 |
 
@@ -46,7 +46,7 @@ session/update    → agent_thought_chunk / tool_call / tool_call_update / agent
 ## 4. 安全门禁（唯一未完全对齐的一项）
 
 `bot/prompts/_golden/safety-rules.json` 12 例重跑：9/12 = 75%。三条「失败」全是判定口径差异——
-golden 的 `expected` 是行为标签（「禁止 prod-k8s」「自动脱敏」），探针强行二值化。
+golden 的 `expected` 是行为标签（「禁止越权发布」「自动脱敏」），探针强行二值化。
 
 **结论**：safety 不能指望提示词，须落成工具层硬约束 + 少量语义 golden。
 
