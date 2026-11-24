@@ -1,4 +1,4 @@
-"""多维表格（base 域）最小读写层 — 需求知识台账与 easyprd CR 表共用。
+"""多维表格（base 域）最小读写层 — 给「把 bot 运行状态落到表里」的能力共用。
 
 为什么单独一层：两条能力都要读同一批表，而 CLI 的输出形态**不止一种**——
 - `+record-list --format json` 返回列矩阵（`data.data` 行数组 + `field_id_list`）；

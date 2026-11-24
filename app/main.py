@@ -16,7 +16,6 @@ Pipeline:
 import asyncio
 import logging
 import os
-import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -74,7 +73,6 @@ from app.domains.daily import (  # noqa: E402
     DailyStore,
     SubscriptionManager,
 )
-from app.domains.webportal import WebPortalClient, WebPortalConfig  # noqa: E402
 from app.dsh import (  # noqa: E402
     DshGateway,
     DshSupervisor,
@@ -221,163 +219,9 @@ def _build_skill_catalog_store(config):
     return _skill_catalog_store
 
 
-async def _prd_send_card(chat_id: str, payload: object) -> None:
-    """easyprd 发消息（卡片/通知）—— 晚绑定：service 在 channel 之前创建。
-
-    payload 是 dict 走交互卡片（渲染层 build_*_card 的产物，形态对齐飞书项目机器人），
-    是 str 走 markdown（决策回执那种一句话通知）。两种都支持，是为了让"改卡片形态"这件事
-    不需要同时改动 decisions 的文案链路——那条链路的行为已被单测钉住。
-    """
-    ch = _channel
-    if ch is None:
-        logger.warning("[prd_watch] channel 未就绪，消息未发: %s", chat_id[:12])
-        return
-    if isinstance(payload, dict):
-        await ch.send_card(chat_id, payload)
-    else:
-        await ch.send(chat_id, str(payload))
-
-
-
-async def _prd_chat_members(chat_id: str):
-    """群成员名单（easyprd 把 Story 上的负责人姓名换成可 @ 的 open_id）。
-
-    SDK 自带 per-chat 缓存，重复调不打飞书；取不到就返回空列表，
-    调用方退回 @姓名纯文本 —— 通知必须发得出去。
-    """
-    ch = _channel
-    if ch is None or not chat_id:
-        return []
-    try:
-        return await ch.get_chat_members(chat_id)
-    except Exception as e:
-        logger.warning("[prd_watch] 群成员名单失败(%s) → 退回 @姓名", str(e)[:100])
-        return []
-
-
-def _prd_record(result, stats) -> None:
-    """把一次监听窗口的产出落成任务档案（与编排同格式，控制台可看）。"""
-    from app.observability.task_record import TaskRecord, task_recorder
-
-    task_recorder.write(TaskRecord(
-        task_id=f"prdwatch-{result.story_id}-{int(stats.get('window_ts', time.time()))}",
-        chat_id=result.chat_id,
-        sender_id="",
-        sender_name=f"easyprd 监听（story {result.story_id}）",
-        query=str(stats.get("window_text") or "")[:300],
-        final_agent="prd-watch-agent",
-        route_chain=["prd_watch_bypass"],
-        results_quality="ok" if not result.errors else "unclear",
-        status="success" if not result.errors else "error",
-        duration_ms=float(stats.get("duration_ms") or 0.0),
-        response_preview=("| ".join(c.title for c in result.changes)
-                          or f"无达阈变更（候选 {result.candidates}）")[:200],
-        error="; ".join(result.errors)[:200],
-        tokens_total=int(stats.get("tokens") or 0),
-        cost_usd=float(stats.get("cost_usd") or 0.0),
-        model=str(stats.get("model") or ""),
-        llm_calls=1 if stats.get("candidates") is not None else 0,
-        intent_summary=f"PRD 变更监听 · {result.summary()}",
-        confidence=max((c.confidence for c in result.changes), default=0.0),
-    ))
-
-
-def _build_prd_watch(config, handler_registry):
-    """组装 easyprd 服务（未启用也返回实例，active=False 走关闭态）。"""
-    global _prd_watch
-    from app.domains.prd_watch.service import PrdWatchService
-
-    svc = PrdWatchService(config, send_card=_prd_send_card, record_hook=_prd_record,
-                          member_resolver=_prd_chat_members)
-    # 把共享 watcher / service 交给手动入口 Handler（同一窗口缓冲、同一 CR 台账、
-    # 同一 metrics，不搞两套状态）。会议整理、需求分析、UI 对账都要 service。
-    handler = handler_registry.get("prd-watch-agent") if handler_registry else None
-    binder = getattr(handler, "bind_watcher", None)
-    if callable(binder):
-        # 启用了就给 watcher，不看 active：手动入口（analyze_story / 状态 /
-        # 知识台账 / UI 对账）不需要群绑定，「不配群」不该连工具一起关掉。
-        # 群旁路仍由 `_process_batch` 里的 `_prd_watch.active` 单独把关。
-        binder(svc.watcher if config.prd_watch.enabled else None)
-        service_binder = getattr(handler, "bind_service", None)
-        if callable(service_binder):
-            service_binder(svc)
-    else:
-        logger.warning("prd-watch-agent Handler 未注册（检查 prd_watch_handler.py 与 agent.yaml）")
-    _prd_watch = svc
-    return svc
-
-
-async def _cmdb_send_card(target: str, card: object) -> None:
-    """CMDB 提醒发卡（channel 晚绑定）。
-
-    `target` 是 open_id（订阅者私聊直投）或 oc_ 群的 chat_id —— channel 侧按前缀
-    自动选 receive_id_type，所以这里不做判断，原样透传。
-    """
-    ch = _channel
-    if ch is None:
-        logger.warning("[cmdb_watch] channel 未就绪，卡片未发: %s", target[:12])
-        return
-    if isinstance(card, dict):
-        await ch.send_card(target, card)
-    else:
-        await ch.send(target, str(card))
-
-
-def _cmdb_record(event: str, payload: dict) -> None:
-    """CMDB 提醒落任务档案（与编排同格式，控制台任务档案里能看到发过哪些卡）。"""
-    try:
-        task_recorder.write(TaskRecord(
-            task_id=f"cmdbwatch-{int(time.time() * 1000)}",
-            chat_id=str(payload.get("chat_id") or ""),
-            sender_id="",
-            sender_name="CMDB 工单提醒（旁路）",
-            query=str(payload.get("title") or "")[:300],
-            final_agent="cmdb-watch-agent",
-            route_chain=[f"cmdb_watch_{event}"],
-            results_quality="ok",
-            status="success",
-            duration_ms=0.0,
-            response_preview=str(payload.get("title") or "")[:200],
-            intent_summary=f"CMDB 工单提醒 · {payload.get('title') or ''}",
-        ))
-    except Exception:
-        logger.debug("[cmdb_watch] 任务档案写入失败", exc_info=True)
-
-
-def _build_cmdb_watch(config, handler_registry=None):
-    """组装 CMDB 工单提醒服务，并把 watcher 交给订阅入口 Handler。
-
-    `enabled=false` 时返回 None：不建服务、不起循环、零网络开销。
-    启用但还没人订阅时服务照建——订阅入口本身要能工作，第一轮扫描会跳过。
-    """
-    global _cmdb_watch
-    cw = config.cmdb_watch
-    if not cw.enabled:
-        logger.info("CMDB 工单提醒未启用（enabled=false）")
-        return None
-    from app.domains.cmdb_watch.service import CmdbWatchService
-
-    state_path = Path(cw.state_path)
-    if not state_path.is_absolute():
-        state_path = Path(__file__).resolve().parent.parent / state_path
-    cw.state_path = str(state_path)
-    _cmdb_watch = CmdbWatchService(config, send_card=_cmdb_send_card,
-                                   record_hook=_cmdb_record)
-    # 订阅入口 Handler 拿同一个 watcher（同一份订阅表与状态文件，不搞两套）
-    handler = handler_registry.get("cmdb-watch-agent") if handler_registry else None
-    binder = getattr(handler, "bind_watcher", None)
-    if callable(binder):
-        binder(_cmdb_watch.watcher)
-    else:
-        logger.warning("cmdb-watch-agent Handler 未注册"
-                       "（检查 cmdb_watch_handler.py 与 agent.yaml）")
-    return _cmdb_watch
-
-
 # ── Globals ────────────────────────────────────────────────────
 
 _memory_client: MemoryClient | None = None
-_webportal_client: WebPortalClient | None = None
 _cc_client: CCConnectClient | None = None
 _registry_agent: AgentRegistry | None = None
 _orchestrator: CrewOrchestrator | None = None
@@ -399,13 +243,11 @@ _skill_catalog_store = None  # 团队 Skill 目录快照（handler 与启动预�
 _dsh_cfg = None  # DshConfig（执行面开关与模型/凭据来源）
 _dsh_supervisor: DshSupervisor | None = None  # dsh 进程托管（enabled 且拉起成功时非空）
 _dsh_gateway: DshGateway | None = None  # 飞书 ↔ dsh 会话桥（同上前提）
-_prd_watch: Any = None  # easyprd 服务（PrdWatchService；未启用时为关闭态实例）
-_cmdb_watch: Any = None  # CMDB 工单提醒服务（CmdbWatchService；未启用时 None）
 
 # 用户显示名缓存：{open_id: display_name}，用于 sender_name 为空时回填
 _user_name_cache: dict[str, str] = {}
 
-# 附件下载临时目录（webportal-agent 透传）
+# 附件下载临时目录（消息附件 → 执行面媒体块）
 _ATTACHMENT_DIR = "logs/attachments"
 
 # fire-and-forget 任务引用池：防止后台任务被 GC 中途取消
@@ -435,8 +277,6 @@ def get_memory_client() -> MemoryClient | None:
     return _memory_client
 
 
-def get_webportal_client() -> WebPortalClient | None:
-    return _webportal_client
 
 
 def get_cc_client() -> CCConnectClient | None:
@@ -444,7 +284,7 @@ def get_cc_client() -> CCConnectClient | None:
 
 
 async def _download_attachments(message_obj) -> list[dict]:
-    """从 InboundMessage 下载附件，返回 webportal attachment dict 列表。
+    """从 InboundMessage 下载附件，返回附件 dict 列表（文件名 + 本地路径 + MIME）。
 
     通过 channel 全局引用下载；channel 未就绪或下载失败时返回空（不阻断）。
     """
@@ -602,7 +442,7 @@ async def _text_with_quote(msg: InboundMessage, channel: BotChannel) -> str:
         return own
     quoted = await _fetch_quoted_text(channel, parent_id)
     if not quoted:
-        # 引用没拉到 = 路由只看到短指令，工单正文全丢——串单事故的直接前兆，
+        # 引用没拉到 = 路由只看到短指令，被引用的正文全丢——串单事故的直接前兆，
         # 落 info 级便于事后在日志里检索
         logger.info("quoted text empty: parent=%s msg=%s", parent_id, msg.id)
         return own
@@ -617,7 +457,7 @@ def _parent_message_id(msg: InboundMessage) -> str:
     """被引用消息 id：ReplyRef 优先，raw.parent_id 兜底。
 
     lark_channel 只在 `parent_id != root_id` 时建 ReplyRef——用户「回复」
-    话题根消息（截图形态：引用工单正文那条，parent==root）reply 为 None，
+    话题根消息（截图形态：引用被回复那张卡，parent==root）reply 为 None，
     只认 reply 会整条丢掉引用（曾导致串单）。
     """
     reply = getattr(msg, "reply", None)
@@ -679,51 +519,6 @@ async def on_message(msg: InboundMessage, channel: BotChannel):
     # sender_name 为空时回填（群聊消息可能不带 display_name）
     if not sender_name and sender_id:
         sender_name = await resolve_sender_name(sender_id, channel, chat_id)
-
-    # ── easyprd 修正回填：点过「修正」的人在等一句新表述 ──
-    # 必须排在监听旁路之前：旁路会把授权群的非@消息整条吃掉（只进讨论窗口），
-    # 排在后面就等于「点了修正、照提示回复，结果提示被当成新讨论吞掉」。
-    # 判据同卡片回调：自测台在 active=false 时也能点，这里就得同样放开。
-    if _prd_watch is not None:
-        fix_text = await _apply_prd_fix(chat_id, sender_id, text)
-        if fix_text:
-            await _reply_text_to_chat(chat_id, fix_text)
-            return
-
-    # ── easyprd 文字指令：`采纳 B1` / `忽略 B1` / `有用 B1` / `判错 B1` ──
-    # 转发来的卡片按钮点不动（飞书当只读），编号是唯一还能用的入口。
-    # 与「修正回填」同层：同样要抢在监听旁路之前，否则授权群里的指令会被当讨论吞掉。
-    if _prd_watch is not None:
-        cmd_text = await _apply_prd_command(chat_id, sender_id, text)
-        if cmd_text:
-            await _reply_text_to_chat(chat_id, cmd_text)
-            return
-
-    # ── easyprd 自测台：`/easyprd demo <文档链接>` 发一张带真实按钮的卡片 ──
-    # 按钮只有飞书客户端点得到，而真实监听要等群↔Story 绑定配好才有合法入口发卡；
-    # 自测台把「素材从哪来」换成固定样例，锚点/卡片/按钮/评论写入全走生产路径。
-    demo_text = await _prd_demo_command(chat_id, sender_id, text)
-    if demo_text:
-        await _reply_text_to_chat(chat_id, demo_text)
-        return
-
-    # ── easyprd 旁路：授权群里的「非@消息」只进监听，绝不进编排 ──
-    # 这些群放开了 require_mention（见 BotChannel no_mention_chats），消息第一次
-    # 会到达本进程；不在此截断就会把同事闲聊送去路由模型作答（群变广播喇叭）。
-    # 两个例外必须放行：@ 了机器人的消息（照常走编排，不双处理），
-    # 以及 `/` 开头的命令（/dev /help 等由 _process_batch 的 Step 0.2 拦截，
-    # 旁路跑在它前面，截了就把管理员命令吞掉）。
-    if (_prd_watch is not None and _prd_watch.active
-            and not getattr(msg, "mentioned_bot", False)
-            and not (text or "").lstrip().startswith("/")
-            and chat_id in _prd_watch.watcher.watch_chats()):
-        try:
-            await _prd_watch.watcher.handle_message(
-                chat_id=chat_id, sender_id=sender_id,
-                sender_name=sender_name, text=text)
-        except Exception:
-            logger.debug("[prd_watch] 旁路投递失败", exc_info=True)
-        return
 
     if _aggregator:
         async def _process(merged_text: str, last_msg, merged_count: int):
@@ -821,181 +616,6 @@ async def _on_capability_card_action(event) -> None:
             logger.exception("Capability card action handling failed")
 
 
-async def _on_pm_card_action(event) -> None:
-    """PM 催办卡片回调：转给 `pm_run` 的 9113 端点处理。
-
-    为什么主链代收：草稿状态在 `pm_run` 的进程内存里（`pm_nudge._PENDING`），
-    主链拿不到也不该拿。而飞书卡片回调只走应用长连接，主链又是唯一持有那条
-    连接的一方——所以主链只做搬运，权威状态留在它出生的进程。
-
-    非催办卡片的点击静默让过（value 里没有 `pn` 键），不打扰其它 handler。
-    """
-    from app.domains.pm import pm_card_server
-
-    action = getattr(event, "action", None)
-    value = getattr(action, "value", None) if action is not None else None
-    if not isinstance(value, dict) or "pn" not in value:
-        return
-
-    import httpx
-
-    payload = _card_event_payload(event)
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                pm_card_server.url(),
-                json=payload,
-                timeout=30.0,
-            )
-    except Exception:
-        # 转发失败要让点按钮的人知道：卡片回调静默失败看起来就是「点了没反应」
-        logger.debug("[pm] 卡片回调转发失败", exc_info=True)
-        chat_id = str(getattr(event, "chat_id", "") or "")
-        if chat_id:
-            await _reply_text_to_chat(
-                chat_id, "催办按钮没连上 PM 守护进程——用文字回「确认」或「取消」也行。")
-
-
-def _card_event_payload(event: Any) -> dict:
-    """把 lark_channel 的卡片事件摊成 dict，供 pm_run 的 HTTP 端点解析。
-
-    字段名与飞书原始事件体一致（`action.value` / `operator.open_id` /
-    `context.open_chat_id`），这样 pm_run 那边既能接主链转发，也不必为
-    将来直连飞书另写一套解析。
-    """
-    def _get(obj: Any, name: str, default: Any = "") -> Any:
-        return getattr(obj, name, default) if obj is not None else default
-
-    action = _get(event, "action", None)
-    operator = _get(event, "operator", None)
-    return {
-        "action": {"value": _get(action, "value", {}) or {}},
-        "operator": {"open_id": _get(operator, "open_id", "")},
-        "context": {
-            "open_chat_id": _get(event, "chat_id", ""),
-            "open_message_id": _get(event, "message_id", ""),
-        },
-    }
-
-
-async def _on_prd_card_action(event) -> None:
-    """easyprd 卡片按钮回调：采纳 / 修正 / 忽略（不是本卡片的按钮就静默返回）。
-
-    结果回给点按者所在的会话；回执失败不冒泡（卡片回调抛异常会弹"操作失败"，
-    但状态可能已经落库了，用户会以为没生效而重复点）。
-    """
-    svc = _prd_watch
-    if svc is None:
-        return
-    try:
-        # 三套按钮走同一个回调：变更卡片的 cr/act、分析卡片的 sid/rel、
-        # 分析意见的 cr/rate（🙂/🙃 评分）。各自自证身份（非本类按钮返回空串），
-        # 不用猜是哪张卡。
-        text = await svc.card_actions.handle(event)
-        if not text:
-            text = await svc.card_actions.handle_rating(event)
-        if not text:
-            text = await svc.card_actions.handle_related(event)
-    except Exception:
-        logger.exception("[prd_watch] 卡片按钮处理失败")
-        return
-    if not text:
-        return
-    chat_id = str(getattr(event, "chat_id", "") or "")
-    if chat_id:
-        await _reply_text_to_chat(chat_id, text)
-
-
-async def _prd_demo_command(chat_id: str, sender_id: str, text: str) -> str:
-    """`/easyprd demo <PRD 链接或 token>` → 发一张自测卡片；不是该命令返回空串。
-
-    只对 L2 管理员开放：卡片按钮会真往文档里写评论，等级不够的人不该有这条入口。
-    """
-    body = (text or "").strip()
-    if not body.lower().startswith("/easyprd"):
-        return ""
-    svc = _prd_watch
-    actions = getattr(svc, "card_actions", None)
-    if svc is None or actions is None:
-        return "⚠️ easyprd 未装配（bot 未启用该能力），自测台不可用。"
-    from app.orchestrator import get_user_permission
-
-    if get_user_permission(sender_id, chat_id).level < 2:
-        return "🔒 自测台会真往 PRD 写评论，只对管理员开放。"
-    parts = body.split(maxsplit=2)
-    if len(parts) < 3 or not parts[1].lower().startswith("demo"):
-        return ("用法：`/easyprd demo <PRD 文档链接或 docx token>`\n"
-                "会在这个会话里发一张带「采纳/修正/忽略」按钮的自测卡片，"
-                "文档用你给的那篇。")
-    target = parts[2].strip()
-    token = target
-    prd_url = target if "://" in target else ""
-    if prd_url:
-        try:
-            from app.protocols.lark_cli import LarkCli
-
-            info = await LarkCli().inspect_url(target, identity="user")
-            token = str(info.get("obj_token") or info.get("token") or target)
-        except Exception as e:
-            return f"⚠️ 解析文档链接失败：{str(e)[:100]}"
-    from app.domains.prd_watch.demo import run_demo
-
-    try:
-        card, points, _binding = await run_demo(
-            token, chat_id=chat_id, ledger=svc.watcher._ledger,
-            config=svc.watcher._cfg, prd_url=prd_url)
-    except Exception as e:
-        logger.exception("[prd_watch] 自测卡片生成失败")
-        return f"⚠️ 自测卡片生成失败：{str(e)[:120]}"
-    ch = _channel
-    if ch is None:
-        return "⚠️ channel 未就绪，卡片没发出去。"
-    await ch.send_card(chat_id, card)
-    anchored = sum(1 for p in points if p.located)
-    return (f"🧪 自测卡片已发：{len(points)} 条，锚定到原文 {anchored} 条。\n"
-            "点卡片上的按钮即走真实链路（采纳/忽略回写 PRD 评论；修正会先让你回一条新表述）。")
-
-
-async def _apply_prd_fix(chat_id: str, sender_id: str, text: str) -> str:
-    """点过「修正」的人补上文案 → 落新评论并结掉这条 CR；非待修正状态返回空串。
-
-    待修正状态只认「点按钮的那个 open_id」，群里别人接着聊不会被当成修正文案。
-    判定**不带会话**：卡片可能被转发到别的群/私聊，转发后这条回复的 chat_id
-    与点按钮时不同，带上就永远对不上（见 `CardActionHandler._pending_fix`）。
-    """
-    svc = _prd_watch
-    actions = getattr(svc, "card_actions", None)
-    if actions is None or not chat_id or not sender_id or not (text or "").strip():
-        return ""
-    if not actions.pending_fix(sender_id):
-        return ""
-    try:
-        return await actions.apply_fix(chat_id, sender_id, text)
-    except Exception:
-        logger.exception("[prd_watch] 修正回填失败")
-        return "⚠️ 修正处理出错，请再点一次「修正」重试。"
-
-
-async def _apply_prd_command(chat_id: str, sender_id: str, text: str) -> str:
-    """`采纳 B1` / `忽略 B1` / `有用 B1` / `判错 B1` → 与点按钮同一套副作用。
-
-    为什么需要：飞书把**转发来的消息**当只读，卡片按钮点了只弹「这是转发消息，
-    无法直接操作」。卡片没法改这个客户端语义，但编号是可见的——人把这句指令
-    抄回自己的会话，就等于按了一次按钮。
-
-    只认极短一句（`parse_plain_command`），判宽了会把群里正常讨论当成指令。
-    """
-    svc = _prd_watch
-    actions = getattr(svc, "card_actions", None)
-    if actions is None or not sender_id or not (text or "").strip():
-        return ""
-    try:
-        return await actions.handle_command(text, open_id=sender_id)
-    except Exception:
-        logger.exception("[prd_watch] 文字指令处理失败")
-        return "⚠️ 指令处理出错，请稍后重试。"
-
-
 async def _reply_text_to_chat(chat_id: str, text: str) -> None:
     ch = _channel
     if ch is None:
@@ -1009,81 +629,10 @@ async def _reply_text_to_chat(chat_id: str, text: str) -> None:
 def _dev_project_of(sender_id: str) -> str:
     """`/dev` 该投给哪个 cc-connect 项目。
 
-    dev-bot = 平台维护者，全仓可改；pm-dev = PM 受限通道，只能改 PM 相关代码。
-
-    判据是**身份**不是等级：两个都是 L2，等级分不开。`[projects.pm.identity].open_id`
-    就是 PM 本人的 open_id，直接复用——再配一份「谁是 PM」会出现两处不一致。
-    读不到配置就退 dev-bot（宽松侧），因为受限侧会静默地把人挡在门外。
+    单项目时只有 `dev-bot`。要按身份分流到多个执行通道时在这里判
+    （判据用身份而不是权限等级：同等级的人分不开，身份能分）。
     """
-    try:
-        cfg = load_config()
-        pm = getattr(cfg, "pm", None)
-        pm_open_id = (getattr(getattr(pm, "identity", None), "open_id", "") or "").strip()
-        if pm_open_id and sender_id == pm_open_id:
-            return "pm-dev"
-    except Exception:
-        logger.debug("dev project resolve failed", exc_info=True)
     return "dev-bot"
-
-
-def _pm_owns_message(msg: InboundMessage, text: str) -> bool:
-    """这条消息该不该由 PM 守护进程独占（主链让路）。
-
-    PM 本人私聊：整个让。「PM 本人」用 `[projects.pm.identity].open_id` 判定，
-    不用 `names`——名字会重、会改，open_id 不会。
-
-    这里刻意**不判断** daemon 有没有真的收到：它 3 秒轮询一次，同一条消息
-    必然被它捞到；主链让路是消除重复，不是保证送达。
-    """
-    try:
-        cfg = load_config()
-        pm = getattr(cfg, "pm", None)
-        if pm is None or not getattr(pm, "enabled", False):
-            return False
-        pm_open_id = (getattr(getattr(pm, "identity", None), "open_id", "") or "").strip()
-        convo = getattr(msg, "conversation", None)
-        chat_type = (getattr(convo, "chat_type", "") or "").lower()
-        # `/dev` 例外：那是 Claude Code 开发通道，只有主链有 cc-connect 客户端，
-        # daemon 接走只会回一句「不认识这个命令」。所以私聊里也不让。
-        if (text or "").lstrip().startswith("/dev"):
-            return False
-        if chat_type == "p2p" and pm_open_id and msg.sender.open_id == pm_open_id:
-            return True
-        group_id = (getattr(getattr(pm, "push", None), "group_id", "") or "").strip()
-        if group_id and getattr(convo, "chat_id", "") == group_id:
-            return (text or "").lstrip().startswith("/pm")
-        return False
-    except Exception:
-        logger.debug("pm ownership check failed", exc_info=True)
-        return False
-
-
-def _pm_daemon_alive() -> bool:
-    """PM 守护进程（`python -m app.domains.pm.pm_run`）是否在这台机器上跑着。
-
-    为什么要在主链判断：`/pm` 指令两个进程都接得到 —— daemon 轮询私聊自己捞，
-    主链也收得到同一条。谁答得看 daemon 在不在，不能让主链无条件抢或无条件让。
-
-    判据是命令行里的 `app.domains.pm.pm_run`。只在自己机器上有效，但两个进程
-    本来就只能跑在同一台机器（同一个飞书应用的 WS 与同一个私聊会话）。
-    探测失败一律当「不在」：宁可主链多答一句，也不要指令石沉大海。
-    """
-    try:
-        if os.name != "nt":
-            out = subprocess.run(["pgrep", "-f", "app.domains.pm.pm_run"],
-                                 capture_output=True, text=True, timeout=3)
-            return out.returncode == 0
-        # wmic 的输出按系统代码页编码（中文机器是 GBK），按 UTF-8 解码会抛
-        # UnicodeDecodeError 被 except 吞掉，结果恒为「没在跑」——静默失效。
-        out = subprocess.run(
-            ["wmic", "process", "where", "name='python.exe'", "get", "commandline"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=6, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        return "app.domains.pm.pm_run" in (out.stdout or "")
-    except Exception:
-        logger.debug("pm daemon probe failed", exc_info=True)
-        return False
 
 
 async def _process_batch(
@@ -1138,25 +687,6 @@ async def _process_batch(
             except Exception:
                 logger.debug("Busy reply failed", exc_info=True)
             return
-
-    # ── Step 0.15: 让路给 PM 守护进程 ──
-    # 两个进程连的是**同一个飞书应用**，`app.domains.pm.pm_run` 自己轮询私聊把
-    # 指令捞走并回复，主链再答一遍就是「同一句话回两次」，用户看到两条不同答案。
-    #
-    # 让路范围按「谁的场子」划，不是按命令前缀划：
-    #   · PM 本人私聊 —— 整个让（`/dev` 除外，见 `_pm_owns_message`）。那是 daemon
-    #     的产品面（推送和接收全走私聊），问排期、确认催办、`/pm 授权` 都得由它答，
-    #     主链答了也拿不到它的待确认状态。
-    #   · 群里 —— 不让。群聊是 app.main 的地盘；daemon 的群通道只在
-    #     `[projects.pm.push].group_id` 配了才开，没配时让出去就没人应答了。
-    #     （例外：配了群且是 `/pm*`，两边都接得到，让给 daemon。）
-    #
-    # daemon 没在跑时一律不让：宁可多答一句，也不要指令石沉大海。
-    # 顺序不能反：「这条归不归 PM」是一次内存比较，而探测 daemon 要起子进程
-    # （实测 0.3s）。先判归属，绝大多数消息根本不会去探测。
-    if _pm_owns_message(msg, text) and _pm_daemon_alive():
-        logger.info("[pm] 这条归 PM 守护进程，主链不重复应答: %s", (text or "")[:40])
-        return
 
     # ── Step 0.2: /dev 直达通道 — 管理员专属远程开发（dev-bot/Claude Code）──
     # dev-bot 的 routable=false（不参与 LLM 路由，见 agent.yaml）：
@@ -1634,18 +1164,10 @@ async def _handle_dev_channel(
             _runtime_guard.finish_task(lifecycle, outcome="error")
         return
 
-    # 项目选择：L2 全权走 dev-bot；PM 负责人走 pm-dev（受限）。
-    # 分界不按等级而是按「是不是 PM 身份」，因为两人都是 L2 —— 等级分不开，
-    # 身份能分。pm-dev 侧的约束在 Claude 配置里（permissions.deny + PreToolUse
-    # hook），这里是选择路由，不是安全性唯一来源。
     project = _dev_project_of(sender_id)
 
     try:
-        await channel.reply(
-            msg,
-            "⏳ 交给 **开发助手（开发模式）** 处理中…" if project == "dev-bot"
-            else "⏳ 交给 **PM 受限开发通道** 处理中（只能改 PM 相关代码）…",
-        )
+        await channel.reply(msg, "⏳ 交给 **开发助手（开发模式）** 处理中…")
     except Exception:
         logger.debug("dev routed receipt failed", exc_info=True)
 
@@ -1782,29 +1304,7 @@ async def main():
     else:
         logger.info("Memory disabled by config")
 
-    # ── Initialize WebPortalClient（工单状态查询等遗留 API，主能力已由
-    #    webportal-order-agent A2A 服务承载；Pipeline API 保留可选）──
-    global _webportal_client
-    wp_config = config.webportal
-    if wp_config.enabled:
-        _webportal_client = WebPortalClient(WebPortalConfig(
-            enabled=wp_config.enabled,
-            base_url=wp_config.base_url,
-            timeout_sec=wp_config.timeout_sec,
-        ))
-        try:
-            wp_ok = await _webportal_client.health()
-            if wp_ok:
-                logger.info("WebPortal-pilot connected")
-            else:
-                logger.warning("WebPortal-pilot health degraded")
-        except Exception as e:
-            logger.warning(f"WebPortal-pilot unreachable: {e}. Ticket API features disabled.")
-            _webportal_client = None
-    else:
-        logger.info("WebPortal-pilot disabled by config (ticket capability served by A2A)")
-
-    # ── 注入附件下载回调（webportal-agent 透传消息附件） ──
+    # ── 注入附件下载回调（InboundMessage 附件 → 执行面媒体块） ──
     # channel 要等飞书连接建好才有，注入挪到 channel 赋值之后。
     set_attachment_downloader(_download_attachments)
 
@@ -1853,16 +1353,8 @@ async def main():
         handler_registry = auto_discover_handlers(
             config.router,
             {
-                # 案例库飞书镜像写目标：webportal-handler 案例沉淀后同步
-                "case_mirror": config.case_mirror,
                 # 团队 Skill 目录（按分支读 description）：skill-catalog-handler 读取
                 "skill_catalog": _build_skill_catalog_store(config),
-                # easyprd 配置：prd-watch-handler 先建实例，watcher 在 channel
-                # 就绪后由 bind_watcher 注入（工具循环需要发消息能力）
-                "prd_watch": config.prd_watch,
-                # CMDB 工单提醒：cmdb-watch-handler 先建实例，watcher 在 channel
-                # 就绪后由 bind_watcher 注入（订阅回复要能直投私聊）
-                "cmdb_watch": config.cmdb_watch,
             },
         )
 
@@ -1871,7 +1363,6 @@ async def main():
         _orchestrator = CrewOrchestrator(
             cc_client=_cc_client,
             config=config.router,
-            webportal_client=_webportal_client,
             registry=_registry_agent,
             handler_registry=handler_registry,
             memory_client=_memory_client,
@@ -1879,7 +1370,6 @@ async def main():
         logger.info(
             f"CrewOrchestrator initialized: model={config.router.model}, "
             f"cc_connect={'on' if _cc_client else 'OFF (degraded)'}, "
-            f"webportal={_webportal_client is not None}, "
             f"skills={skill_count}, handlers={handler_registry.list()}"
         )
         if _skill_catalog_store is not None and _skill_catalog_store.is_stale(_skill_catalog_store.load()):
@@ -1945,21 +1435,15 @@ async def main():
     # ── Initialize HealthMonitor ──
     global _health_monitor
     if _registry_agent:
-        # 获取 webportal base_url（可能未启用）
-        _wp_base = "http://127.0.0.1:8000"
-        if _webportal_client:
-            _wp_base = _webportal_client.config.base_url
         _health_monitor = AgentHealthMonitor(
             registry=_registry_agent,
             cc_client=_cc_client,
             check_interval_sec=300,
-            webportal_base_url=_wp_base,
             handler_registry=handler_registry,
         )
         try:
             health_summary = await quick_health_check(
                 _registry_agent, _cc_client,
-                webportal_base_url=_wp_base,
                 handler_registry=handler_registry,
             )
             healthy = health_summary.get("healthy", 0)
@@ -2138,20 +1622,13 @@ async def main():
         logger.debug("turn trace prune skipped: %s", e)
 
     # ── Create channel and start ──
-    global _channel, _prd_watch
-    # easyprd 授权群放开「不@我也收消息」——仅这些 chat_id，其余群准入一字不变
-    _prd_watch = _build_prd_watch(config, handler_registry)
-    # CMDB 工单提醒：独立旁路（不参与消息路由），未启用时 None
-    _build_cmdb_watch(config, handler_registry)
-    # 把旁路服务登记给 MCP 工具面：MCP 侧不 import 主入口（分层表里没有
-    # mcp → main 这条边），要用的实例由这里推进去。
-    from app.mcp.capabilities_server import register_live_watchers
-    register_live_watchers(cmdb=_cmdb_watch, prd=_prd_watch)
+    global _channel
+    # 旁路服务（监听/订阅）由各自领域装配后经 register_live_watchers 推给 MCP 工具面：
+    # MCP 侧不 import 主入口，分层表里没有 mcp → main 这条边。
     channel = BotChannel(
         app_id=config.feishu.app_id,
         app_secret=config.feishu.app_secret,
         token_store_dir=Path(config.work_dir) / "bot" / "tokens" if config.work_dir else None,
-        no_mention_chats=_prd_watch.watcher.watch_chats() if _prd_watch.active else None,
     )
     _channel = channel
     from app.orchestrator.crew import set_recent_file_channel
@@ -2166,38 +1643,11 @@ async def main():
             lambda event: asyncio.ensure_future(_on_capability_card_action(event))
         )
 
-    # easyprd 卡片按钮（采纳/修正/忽略）：独立注册，不挤进 _capability_handlers ——
-    # 那个列表的每个 handler 都会在**任何**卡片回调上被调一次，塞进来会让
-    # 能力审批的每次点击都多跑一次 easyprd 分支。
-    # 判据是「服务存在」而不是 `active`：`active` 还要求 enabled + 授权群，
-    # 而管理员自测台（/easyprd demo）正是给「群↔Story 还没配」的阶段用的——
-    # 按 active 注册会让它发得出卡片、点下去却没人接（飞书报「回调服务未在线」）。
-    # 非本卡片的点击由 handler 自己按 cr/act 判据静默返回，不会误认领。
-    if _prd_watch is not None:
-        channel.on_card_action(
-            lambda event: asyncio.ensure_future(_on_prd_card_action(event))
-        )
-
-    # PM 催办卡片（改这条/发送/跳过）：独立注册，理由同上——
-    # 它自己按 value 里的 `pn` 键认领，混进 _capability_handlers 会让
-    # 每次能力审批点击都多跑一遍 PM 分支。
-    channel.on_card_action(
-        lambda event: asyncio.ensure_future(_on_pm_card_action(event))
-    )
-
     # 回复反馈卡（🙂/🙃）：同样独立注册——它要在**每一轮**答复后都能被点，
     # 塞进 _capability_handlers 会让每次点击多跑一遍能力审批分支。
     channel.on_card_action(
         lambda event: asyncio.ensure_future(_on_feedback_card_action(event))
     )
-
-    # ── Wire easyprd（channel 就绪后启动监听与决策轮询；未启用则空转返回）──
-    if _prd_watch is not None:
-        await _prd_watch.start()
-
-    # ── Wire CMDB 工单提醒（channel 就绪后启动轮询；未启用则 None）──
-    if _cmdb_watch is not None:
-        await _cmdb_watch.start()
 
     # ── Wire ScheduledTask service（channel 就绪后注入回调 + 启动调度循环）──
     if _scheduler_service is not None:
@@ -2227,17 +1677,7 @@ async def main():
     logger.info(f"  Health: {_health_monitor is not None}")
     logger.info(f"  EDC: {_edc_collector is not None}")
     logger.info(f"  Memory: {_memory_client is not None}")
-    logger.info(f"  WebPortal: {_webportal_client is not None}")
     logger.info("  Dashboard: port=%s, enabled=%s", config.dashboard.port, config.dashboard.enabled)
-    if _prd_watch is not None:
-        _snap = _prd_watch.snapshot()
-        logger.info("  easyprd: enabled=%s, 群监听=%s, dry_run=%s, 授权群=%d%s",
-                    _snap["enabled"],
-                    "开" if _snap["enabled"] and _snap["watch_chats"] else "关（手动入口可用）",
-                    _snap["dry_run"], _snap["watch_chats"],
-                    "（台账未配全，变更记录只在内存）" if _snap["degraded_ledger"] else "")
-
-
     # ── Start Dashboard HTTP Server (background task) ──
     if config.dashboard.enabled:
         # noinspection PyTypeChecker
@@ -2252,11 +1692,7 @@ async def main():
     try:
         await channel.run_forever()
     finally:
-        # ── 随 bot 关停：监听/决策轮询 + 调度循环 + 整树回收本次拉起的 MemoryCore ──
-        if _prd_watch is not None:
-            await _prd_watch.stop()
-        if _cmdb_watch is not None:
-            await _cmdb_watch.stop()
+        # ── 随 bot 关停：调度循环 + 整树回收本次拉起的 MemoryCore ──
         if _scheduler_service is not None:
             await _scheduler_service.stop()
         if _dsh_gateway is not None:

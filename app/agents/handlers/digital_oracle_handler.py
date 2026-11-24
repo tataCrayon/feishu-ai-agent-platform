@@ -7,7 +7,7 @@ komako-workshop/digital-oracle，MIT），本 Handler 是编排壳：
    一次调用并行拉取（引擎 gather() 线程池，单源失败不影响其他）
 3. 信号结果 → 紧凑文本回填 LLM，由它按数字先知输出模板组织报告
 
-同步阻塞取数跑线程池（同 webportal_handler 先例）；工具数据只读公开 API，
+同步阻塞取数跑线程池；工具数据只读公开 API，
 无凭据、无写操作。
 """
 

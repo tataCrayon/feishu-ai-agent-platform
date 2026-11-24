@@ -394,7 +394,6 @@ def _route_label(step: str) -> str:
             "deploy": "发布管理",
             "config": "配置管理",
             "daily": "技术日报",
-            "webportal": "工单系统",
             "schedule": "定时任务",
             "digital-oracle": "数字先知",
         }
@@ -402,8 +401,8 @@ def _route_label(step: str) -> str:
     if step == "dev-bot":
         return "开发助手"
     if step.startswith("skill-"):
-        return {"skill-elk-log-query": "ELK 日志查询", "skill-order-sql": "工单→SQL",
-                "skill-demo-guard": "项目巡检"}.get(step, step[len("skill-"):])
+        return {"skill-aihot": "AI 资讯", "skill-demo-guard": "项目巡检"}.get(
+            step, step[len("skill-"):])
     return step
 
 

@@ -33,7 +33,7 @@ ignore = [
 "tests/*" = ["B011", "SIM117"]
 "app/scripts/*" = ["T201"]
 # digital-oracle 是 vendoring 上游包（komako-workshop/digital-oracle），保持上游原样
-# （工单引擎 order-sql 已于 webportal-agent v3.0.0 迁出为独立 A2A 服务，豁免随包移除）
+# （原随包引擎已迁出为独立服务，豁免随包移除）
 "bot/skills/digital-oracle/*" = ["ALL"]
 
 [lint.isort]

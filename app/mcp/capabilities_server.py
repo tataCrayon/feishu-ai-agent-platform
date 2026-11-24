@@ -33,8 +33,8 @@ Handler 需要 `sender_id / chat_id` 才能把订阅绑到正确的人。dsh 的
 
 ## 哪些工具不投影
 
-- 绑死卡片按钮回调的：PRD 整理（`flush_prd_watch`）要等用户点「采纳/修正」，
-  脱离飞书链路无法完成确认。
+- 绑死卡片按钮回调的：需要等用户点按钮才能确认的动作，脱离飞书链路做不完。
+  清单见 `_NEEDS_LIVE_CHANNEL`。
 - 定时任务的**写操作照常投影**：创建走 `ScheduledTaskService.submit()`（不依赖
   `InboundMessage`，回执卡片照样发到本会话），暂停/恢复/取消按发送者身份鉴权
   （本人或 L2）。没有审批门要绕过——创建即生效，只是不再要求「调用方手里有
@@ -63,9 +63,7 @@ logger = logging.getLogger("mcp.capabilities")
 SERVER_NAME = "capabilities"
 
 # 需要活会话/审批卡回调的工具：不投影（见模块 docstring）
-_NEEDS_LIVE_CHANNEL: dict[str, str] = {
-    "flush_prd_watch": "整理当前群讨论要等卡片按钮回调，脱离飞书链路无法完成确认",
-}
+_NEEDS_LIVE_CHANNEL: dict[str, str] = {}
 
 # 依赖启动期单例（ctx 注入），子进程里拿不到的不投影。
 # 目前为空：ctx 已按 main 的同一份构造补齐（见 registry()），skill_catalog 也就通了。
@@ -73,15 +71,14 @@ _NEEDS_BOOT_SINGLETON: set[str] = set()
 
 # 绑定调用者身份的工具：没有注入身份时必须拒绝（只读查询不受限）
 _NEEDS_CALLER = {
-    "subscribe_cmdb_watch", "unsubscribe_cmdb_watch", "watch_cmdb_order",
-    "unwatch_cmdb_order",
+    "create_scheduled_task", "pause_task", "resume_task", "cancel_task",
 }
 
 # 查询类工具：不「绑定」身份，但答案因人而异（「我的订阅」）。没有身份时不拒绝，
 # 只是如实说「不知道你是谁」——用户问状态时宁可拿到半份答案，也不要一句看不出来
 # 原因的「请在飞书会话里发起」。
 _PERSONAL_READS = {
-    "cmdb_watch_status", "list_cmdb_watches",
+    "list_tasks", "get_task",
 }
 
 _CALLER_ENV = (
@@ -97,12 +94,14 @@ _config: Any = None
 # 不能懒到第一次 tool call 里——见 `_preload_heavy_engines`。
 _preloaded = False
 
-# 进程内已装配的旁路服务（cmdb / prd 的 watcher 归属方）。子进程恒为空。
+# 进程内已装配的旁路服务（长驻监听类能力的 watcher 归属方）。子进程恒为空。
+# 本仓不带业务旁路，登记表留空；新增旁路能力时由启动方 `register_live_watchers`
+# 注入实例，MCP 侧只读不构造（分层表里没有 mcp → main 这条边）。
 _live_watchers_registry: dict[str, Any] = {}
 
 
 def register_live_watchers(**services: Any) -> None:
-    """由启动方注入旁路服务实例（`cmdb=` / `prd=`）。
+    """由启动方注入旁路服务实例（`<kind>=服务`）。
 
     只做登记，不做装配：服务实例的构造顺序（先建 registry、再建 watcher）
     属于启动流程的知识，塞进本模块会让它反向依赖主入口。
@@ -113,10 +112,6 @@ def register_live_watchers(**services: Any) -> None:
 
 def _live_watchers() -> dict[str, Any]:
     """本进程内已装配的服务实例（dsh MCP 子进程里恒为空）。
-
-    为什么还要读：这些工具在 `main.py` 进程内（旧编排链路 / 单测）也可能被
-    调用，那里 watcher 已由启动流程注入。子进程读不到时返回空字典，
-    由 `_ensure_watcher` 就地建一个只读档案版。
     """
     # 注册表由启动方填：本模块不能 import `app.main`——那是分层表里不存在的一条
     # 反向边（mcp → 主入口），也把「装工具面」绑死在「起整个 bot」上（单测与
@@ -168,105 +163,6 @@ def _reply(payload: dict[str, Any]) -> types.CallToolResult:
     )
 
 
-class _ArchiveOnlyClient:
-    """子进程影子 watcher 的取数客户端：默认只认本地档案，但**用户主动指定工单时可真读一次**。
-
-    为什么默认不留真客户端：影子进程会跑订阅回执的统计逻辑（比如「当前跟踪中的单里
-    有几张含你的任务」），留着真客户端就会在 50 人订阅时多出一份内网请求。
-
-    但「关注/取消关注某张工单」是用户当场下的指令，回执要念工单名与当前进度——
-    这一条不读就等于把 `watch_cmdb_order` 整个打死（实测：dsh 里关注任何单都回
-    「读不到工单」，用户以为能力不存在）。所以 `fetch_order` 走真客户端，
-    频率天然由「用户手动关注的次数」决定，与轮询无关。
-    """
-
-    def __init__(self, base_url: str = "") -> None:
-        self.base_url = base_url
-        self._reader: Any = None
-
-    def _real(self) -> Any:
-        if self._reader is None:
-            from app.domains.cmdb_watch.client import CmdbClient, load_session_id
-
-            self._reader = CmdbClient(base_url=self.base_url, session_id=load_session_id())
-        return self._reader
-
-    @property
-    def session_id(self) -> str:
-        """读本地会话文件，不登录、不探活。
-
-        状态工具把它念给用户（「列表登录态：有效/缺失」）：这个进程不发请求，
-        真去探活等于为一句状态回执多打两次内网。会话有没有过期由主进程在下一轮
-        发现时才知道——这里只如实反映「手上有没有一把会话」，不冒称已验证。
-        恒返回空串会让状态回执永远说「缺失」，与主进程日志里的「登录态有效」自相矛盾。
-        """
-        from app.domains.cmdb_watch.client import load_session_id
-
-        return load_session_id()
-
-    def fetch_order(self, order_id: int, env: str = "prod") -> Any:
-        return self._real().fetch_order(order_id, env)
-
-    def fetch_status(self, order_id: int, env: str = "prod") -> Any:
-        from app.domains.cmdb_watch.client import CmdbError
-
-        raise CmdbError("MCP 子进程不轮询 CMDB（提醒由主进程轮询）")
-
-    order_exists = fetch_status
-
-    def list_recent_order_ids(self, env: str = "prod") -> list[int]:
-        return []
-
-
-def _ensure_watcher(handler: Any, kind: str) -> None:
-    """子进程里没有 main 的 watcher：按同一份配置就地建一个**只读档案版**。
-
-    为什么不能照搬 main 的「未接线」：dsh 的 MCP 子进程天生没有 main 的运行时
-    对象，那句提示会把所有 CMDB/PRD 工具永久打死——配置明明开着，用户看到的是
-    「功能关了」。
-
-    这个 watcher 只用来看档案（订阅表、关注表、状态计数），**不启动轮询**：
-    轮询属于常驻的 main 进程，子进程只是长命会话的一个影子。写操作（订阅/关注）
-    落的是同一份 state.json，所以照样有效；副作用是提醒由 main 进程按时发出。
-    """
-    if getattr(handler, "_watcher", None) is not None:
-        return
-    try:
-        cfg = app_config()
-        if kind == "cmdb" and cfg.cmdb_watch.enabled:
-            from pathlib import Path
-
-            from app.domains.cmdb_watch.watcher import CmdbWatcher
-
-            cw = cfg.cmdb_watch
-            state = Path(cw.state_path)
-            # 相对路径的基准是仓库根（与 main 的解析同口径），不是进程 cwd——
-            # MCP 子进程的 cwd 取决于谁拉起它，落错地方的后果是「订阅了但收不到」。
-            if not state.is_absolute():
-                state = Path(__file__).resolve().parents[2] / state
-                cw.state_path = str(state)
-            watcher = CmdbWatcher(cw)
-            # 影子 watcher 只登记订阅：订阅回执会为「订阅时已跟踪的单」算待提醒数量，
-            # 那一步不该在子进程里再打一次内网。换成一个空实现的客户端让任何
-            # 意外的全量读变成明确的错误，而不是默默多花一份网络开销。
-            watcher.bind_client(_ArchiveOnlyClient(cw.base_url))
-            handler.bind_watcher(watcher)
-        elif kind == "prd" and cfg.prd_watch.enabled:
-            from app.domains.prd_watch.service import PrdWatchService
-            from app.domains.prd_watch.watcher import PrdWatcher
-
-            # 子进程也要有完整 service：analyze_story / ingest_meeting / review_prd_ui
-            # 全挂在它上面，只回 watcher 时这些工具会永久回「服务未接线」。
-            # 这里**不 start()** —— 轮询与攒窗属于常驻 main 进程，子进程只是长命会话
-            # 里的影子；卡片出口走纯 HTTP（与定时任务审批卡同一条出口）。
-            handler.bind_watcher(PrdWatcher(cfg.prd_watch, cfg.router))
-            service_binder = getattr(handler, "bind_service", None)
-            if callable(service_binder):
-                service_binder(PrdWatchService(cfg, send_card=_send_card_http))
-    except Exception as e:
-        logger.warning("[mcp.capabilities] %s watcher 就地装配失败：%s", kind, e)
-
-
 async def _send_card_http(chat_id: str, card: dict[str, Any]) -> str:
     """发卡片（纯 HTTP，不依赖 bot 的 channel 对象）。
 
@@ -297,31 +193,10 @@ def registry() -> AgentHandlerRegistry | None:
         # ctx 必须补齐各 Handler 工厂读的键，否则它们会拿到 None 并在 Guard 里
         # 报「未启用」——配置明明是 true，用户看到的是「功能关了」，比报错更难查。
         _registry = auto_discover_handlers(cfg.router, {
-            "case_mirror": cfg.case_mirror,
-            "cmdb_watch": cfg.cmdb_watch,
-            "prd_watch": cfg.prd_watch,
             # 团队 Skill 目录：没有 store 时 handler 会拒绝上线（空目录上线等于
             # 让模型查一份假清单），所以这里按 main 的同一份构造补齐。
             "skill_catalog": _skill_catalog_store(cfg),
         })
-        # watcher 只在 main 进程里存在；子进程按需就地建只读档案版
-        watchers = _live_watchers()
-        for name, watcher in (
-            ("cmdb-watch-agent", watchers.get("cmdb")),
-            ("prd-watch-agent", watchers.get("prd")),
-        ):
-            handler = _registry.get(name)
-            if handler is None:
-                continue
-            if watcher is not None:
-                # watcher 只在具体 Handler（prd/cmdb）上声明，AgentHandler 基类没有；
-                # getattr 兜底比把这条加到基类更诚实——基类不该为两个子类长接口。
-                binder = getattr(handler, "bind_watcher", None)
-                if callable(binder):
-                    binder(getattr(watcher, "watcher", watcher))
-            else:
-                _ensure_watcher(handler, "cmdb" if name.startswith("cmdb") else "prd")
-
         # 定时任务的审批卡也走 HTTP：子进程没有 channel 对象，但卡片必须发得出去，
         # 否则「创建成功」只是建了个没人审批的档案。
         sched = _registry.get("schedule-agent")

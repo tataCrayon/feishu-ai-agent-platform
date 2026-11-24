@@ -82,7 +82,7 @@ async def case_late() -> None:
             await asyncio.sleep(0.15)
             return "迟到但成功的结果", None
 
-        resp, err = await c._inproc_with_deadline("webportal-agent", slow(), STATE)
+        resp, err = await c._inproc_with_deadline("schedule-agent", slow(), STATE)
         assert resp == crew_mod.LATE_DELIVERY and err is None, (resp, err)
         assert delivered == []  # 已让出额度，结果还没到
         await asyncio.sleep(0.4)
@@ -104,7 +104,7 @@ async def case_hard_timeout() -> None:
             await asyncio.sleep(30)
             return "永远到不了", None
 
-        resp, _ = await c._inproc_with_deadline("webportal-agent", hang(), STATE)
+        resp, _ = await c._inproc_with_deadline("schedule-agent", hang(), STATE)
         assert resp == crew_mod.LATE_DELIVERY
         await asyncio.sleep(1.2)
         assert len(delivered) == 1, delivered
@@ -121,7 +121,7 @@ def case_hard_floor() -> None:
     _patch(c, _registry=types.SimpleNamespace(get=lambda n: types.SimpleNamespace(timeout_sec=60)))
     assert c._agent_hard_timeout("daily-agent") == floor, c._agent_hard_timeout("daily-agent")
     _patch(c, _registry=types.SimpleNamespace(get=lambda n: types.SimpleNamespace(timeout_sec=720)))
-    assert c._agent_hard_timeout("webportal-agent") == 720
+    assert c._agent_hard_timeout("schedule-agent") == 60
     _patch(c, _registry=types.SimpleNamespace(get=lambda n: None))
     assert c._agent_hard_timeout("unknown") == floor
     print(f"✅ 硬上限：过低声明(60s)抬到地板 {floor}s，正常声明(720s)照用")

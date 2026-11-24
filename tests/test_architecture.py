@@ -91,7 +91,7 @@ def test_tests_live_under_tests_dir_not_in_app() -> None:
     同目录单测看着「就近可读」，代价是四样：打包/ship 时带进去、mypy 统计被测试
     噪音拉高、`app/` 下任何 glob（含 handler 自动发现）都要额外排除、以及
     「这个模块有没有被测」变成靠翻目录判断。
-    `tests/` 内的目录结构与 `app/` 镜像（`tests/domains/prd_watch/...`），
+    `tests/` 内的目录结构与 `app/` 镜像（`tests/domains/daily/...`），
     所以「源文件在哪」到「它的测试在哪」仍然是可推导的。
     """
     strays = sorted(str(p.relative_to(PROJECT_ROOT)) for p in APP.rglob("test_*.py"))

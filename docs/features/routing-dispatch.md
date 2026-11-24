@@ -15,7 +15,7 @@
 main.on_message → RuntimeGuard → DshGateway.handle(text, chat_id, caller=…)
   → dsh 会话：按**技能目录**（deploy/dsh/agentbiz/skills，白名单同步产物）语义匹配
       → 首行写能力名，然后调会话内 MCP 工具
-      ├─ capabilities → 进程内 Handler（webportal / digital-oracle / cmdb-watch /
+      ├─ capabilities → 进程内 Handler（digital-oracle / schedule / skill-catalog
       │                  prd-watch / schedule / skill-catalog）
       │                  提供 run_with_message 的 Handler 走聚合分派（多轮连发+附件，透传原文）
       └─ feishu / domains / agent.yaml 声明的数据源
@@ -36,15 +36,14 @@ main.on_message → RuntimeGuard → DshGateway.handle(text, chat_id, caller=…
 
 ## 4. 约束与不变量（改前必读）
 
-- **能力名必须来自技能目录**：`aihot` / `webportal-agent` / `schedule-agent` /
+- **能力名必须来自技能目录**：`aihot` / `digital-oracle-agent` / `schedule-agent` /
   `digital-oracle-agent` / `cmdb-watch-agent` / `prd-watch-agent` + `clarify` /
   `direct-answer` / `help`。目录里没有的名字等于这段回复没有归属
 - **技能目录 = 路由候选集**：新增能力只加 `bot/agents/*/agent.yaml` 不跑
   `sync_skills.py`，模型看不见它；反过来，工具型技能塞进目录会与业务能力抢路由
 - **不做全局加载**：`includeDefaultRoots: false`，个人 `~/.agents/skills` 一律不进候选集
 - **聚合分派必须透传用户原文**：路由改写 / intent_summary 不得替代原文传给 Handler——
-  改写文本会污染工单解析（证据：commit `9cc23e5`，2026-09-18）
-- **工单意图的路由身份是 webportal-agent handler**：skill-order-sql 合成 Agent 已下线勿恢复
+  改写文本会把上一件事的描述混进这一件（证据：commit `9cc23e5`，2026-09-18）
   ——它会抢路由（证据：commit `7d5eb6d`，2026-09-18）
 - **定时任务的执行面跟消息链路同一条**：`ScheduledTaskExecutor` 优先 `DshGateway`，
   否则到点产出与手动提问会得到两套结果
@@ -65,11 +64,10 @@ main.on_message → RuntimeGuard → DshGateway.handle(text, chat_id, caller=…
 |---|---|---|
 | 2026-11-05 | 消息链路整体迁到 dsh：路由从「本仓 RouterLLM + 工具表」改为「dsh 按技能目录语义匹配」。旧链路保留为回切保险 | `app/dsh/` + `deploy/dsh/agentbiz/`（迁移行为契约 `docs/specs/20261104-dsh-migration.md`） |
 | 2026-11-06 | 规则从「首条 user 消息」搬进 system prompt（`personaPrefix` 段），并删掉首行能力名契约：该契约全仓无解析方，只让模型多输出一行；同时规则被当普通对话参与压缩。判分从「读首行标签」改为「看实际调了什么工具」——golden 6 例抽样 100% | `deploy/dsh/agentbiz/cordis.patch.yml`（system-prompt 段）+ `dsh_routing_rules.md` v2.0.0 + `verify_routing.py::_infer_label` |
-| 2026-11-05 | 补规则「先定能力，再看工具」：实测模型会因「工具可能失败」把首行改写成 `direct-answer`，CMDB/PRD 类 golden 掉到 50%；加规则后回到 100% | `dsh_routing_rules.md` v1.1.0 |
+| 2026-11-05 | 补规则「先定能力，再看工具」：实测模型会因「工具可能失败」把首行改写成 `direct-answer`，多能力 golden 掉到 50%；加规则后回到 100% | `dsh_routing_rules.md` v1.1.0 |
 | 2026-11-06 | 定时任务执行面接到 dsh：之前走 CrewOrchestrator，dsh 启用后到点产出与群里手动提问不一致 | `app/ops/scheduler/executor.py::_run_instruction` |
 | 2026-11-02 | 进程内通道分派加两级时限：>90s 转后台直投、>`agent.yaml` 的 `timeout_sec` 才放弃。**根因**：`timeout_sec` 自 2026-08 起只被解析、全仓无消费者，长任务（观测最长 1100s）一路占住并发闸额度 → 后续消息排队到 `queue_timeout` 回「系统繁忙」 | `crew._inproc_with_deadline` + `app/orchestrator/test_inproc_deadline.py`（回切链路，dsh 侧由 ACP 超时接管） |
-| 2026-09-18 | 工单聚合分派透传用户原文，隔离路由改写污染 | commit `9cc23e5` |
-| 2026-09-18 | 工单意图回归 webportal-agent handler，skill-order-sql 合成 Agent 下线 | commit `7d5eb6d` |
+| 2026-09-18 | 聚合分派透传用户原文，隔离路由改写污染 | commit `9cc23e5` |
 | 2026-11-24 | 定时任务三处执行可靠性修补：投递判 `SendResult.success`（拒收不抛异常，只看「没抛」会把没送到的记成成功）；`compute_next_run` 落后就改 `now+interval`（否则停机欠下的轮次每轮扫描补一次、连刷到追平）；调度器加 `_in_flight` 去重（执行超过扫描周期时会并发起两次、抢同一个 dsh 会话）。另补 `ScheduledTaskService.on_agents_reloaded` 接线——此前全仓无调用点 | `scheduler/executor.py::execute`、`scheduler/loop.py::{compute_next_run,_scan_once}`、`main.py` 启动段 |
 | 2026-10-12 | 删除 judge+recover 节点：预路由与后判定的双模型割裂拆掉，判定内联回执行方；178 条档案实测 recover 救回率 0.6% / 占 24.5% 成本 / 慢一倍 | 见 `bot/prompts/CHANGELOG.md` 2026-10-12 |
 | 2026-10-12 | 目录重构为 agent-platform 分层（gateway/orchestrator/agents/memory/protocols/eval/guardrails/observability/ops/domains + 共享内核留 app/ 根） | 见 CLAUDE.md「目录地图」 |

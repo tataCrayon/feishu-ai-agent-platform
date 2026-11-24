@@ -84,7 +84,7 @@ def test_at_all_is_stripped_from_body_and_fields(sent_cards):
 def test_card_header_marks_the_real_sender(sent_cards):
     """副标题写「来自某某的消息」：署名必须取真实发送者，不是模型填的名字。"""
     body = _body(feishu_server.send_card_message(
-        "ou_x", "早上好", "今天先看工单 5784", from_name="张三"))
+        "ou_x", "早上好", "今天先看发布单 5784", from_name="张三"))
     assert body["ok"] is True
     card = sent_cards[0][1]
     assert card["header"]["subtitle"]["content"] == "来自 张三 的消息"
@@ -101,10 +101,10 @@ def test_sender_falls_back_to_model_value_without_env(monkeypatch, sent_cards):
 
 def test_fields_become_separate_lines(sent_cards):
     body = _body(feishu_server.send_card_message(
-        "oc_x", "工单提醒", "有 2 张待处理", fields={"工单": "5784", "截止": "今天 18:00"}))
+        "oc_x", "任务提醒", "有 2 项待处理", fields={"单号": "5784", "截止": "今天 18:00"}))
     assert body["ok"] is True
     text = _texts(sent_cards[0][1])
-    assert "**工单：** 5784" in text
+    assert "**单号：** 5784" in text
     assert "**截止：** 今天 18:00" in text
 
 

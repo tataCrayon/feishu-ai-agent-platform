@@ -129,7 +129,7 @@ def test_xls_container_error_is_explicit() -> None:
 def test_docx_keeps_tables() -> None:
     text = _parse_document(_docx_bytes(), "报告.docx")
     assert "第一段正文" in text
-    # 表格是工单/清单类文档的关键信息，纯段落抽取会整块丢掉
+    # 表格是清单/规格类文档的关键信息，纯段落抽取会整块丢掉
     assert "列A | 列B" in text
     assert "值1 | 值2" in text
 

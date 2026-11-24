@@ -9,9 +9,9 @@
 ## 1. 背景
 
 bot 早期用 `app/main.py` 里 5 个硬编码 handler 处理所有消息，intent 识别写死在静态正则里。
-Agent 从 1 个长到 4 个（rwa-bot / db-agent / deploy-agent / config-agent）后，
+Agent 从 1 个长到 4 个（通用助手 + 三个外部系统角色）后，
 新增一个 Agent 要在 5 处手工改动，且同一份 system_prompt 要在 `config.toml` 与 Agent 目录
-两处同步——已经开始漂移（`config.toml` 的 rwa-bot prompt 与 `agents.yaml` 不一致）。
+两处同步——已经开始漂移（`config.toml` 的内联 prompt 与 `agents.yaml` 不一致）。
 
 ## 2. 决策考虑
 
@@ -53,7 +53,7 @@ Agent 从 1 个长到 4 个（rwa-bot / db-agent / deploy-agent / config-agent�
 
 - **核心理由**：① 新增 Agent 的改动量从「5 文件 / 4 模块」收敛到「1 条 YAML + 1 次生成」；
   ② 消除 prompt 双处维护漂移的根因；③ MCP 最小权限隔离声明式落地
-  （db 只挂 MySQL、deploy 只挂 CMDB、config 只挂 Nacos）。
+  （各自只挂自己声明的那份数据源，同名只挂一次）。
 - **放弃其他选项**：A 无法承载扩展；C 需引入动态加载复杂度且仍绕不开 config 生成。
 - **影响范围**：`app/agents/`（registry / generator / dispatcher）、`agents.yaml`、
   `app/main.py` 分派入口、`config.toml` 生成段。

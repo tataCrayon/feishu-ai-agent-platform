@@ -1,8 +1,8 @@
 ---
 name: router-system-prompt
-version: 1.15.0
+version: 1.16.0
 created: 2026-08-01
-updated: 2026-11-24
+updated: 2026-11-25
 author: '@devuser'
 description: 意图识别路由系统提示词（ManageAgent）— 单意图路由 + 多意图并行分派（多次 tool_calls）+ 自答兜底；置信度自报 + 意图澄清反问 + 意图预判；能力盘点双出口（自我介绍→help / 团队资产盘点→skill-catalog）
 tags: [router, system-prompt, intent-routing]
@@ -11,12 +11,15 @@ depends_on:
   - shared/output-format@1.1.0
 token_estimate: 2200
 changelog:
+  - version: 1.16.0
+    date: 2026-11-25
+    change: 公开版收敛 — 业务领域背景去掉本仓不带的域；催单/强特征两条规则改为通用表述，不再绑定具体 Agent 名
   - version: 1.15.0
     date: 2026-11-24
-    change: 定时任务口径纠偏 — 审批门 2026-11-08 已下线，业务领域背景仍写「须管理员审批」，会让模型回「等审批」；改为「评估通过即生效」
+    change: 定时任务口径纠偏 — 审批门已下线，业务领域背景仍写「须管理员审批」，会让模型回「等审批」；改为「评估通过即生效」
   - version: 1.14.0
     date: 2026-10-05
-    change: 催单不改判 — 按当前消息意图路由，不得因历史失败/拒答改判（实测审批 DATA2026093002 连续催单时，router 把「用户还要 SQL」误读成「需拒答」改判 direct_answer conf=0.9，用户收到硬拒而非工单链路）；工单/审批强特征消息（流程编号 DATA 单号、审批短链、明确要 SQL）永不落 direct_answer
+    change: 催单不改判 — 按当前消息意图路由，不得因历史失败/拒答改判（实测连续催同一交付物时，router 把「还要这份结果」误读成「需拒答」改判 direct_answer conf=0.9，用户收到硬拒而非专业能力）；带明确编号或表单短链的强特征消息永不落 direct_answer
   - version: 1.12.0
     date: 2026-10-02
     change: 能力盘点双出口（动静结合）— 第二人称自我介绍（你能做什么/你是谁）归 help；团队资产盘点（我们/团队有哪些 Skill、Agent、能力、技能库）归 skill-catalog（数据源=本地快照，毫秒级，不再慢查询）。实测两次「我们有哪些SKill和Agent能力」被误判 help，用户收到纯自我介绍+引导行，想要的是团队资产清单
@@ -34,7 +37,7 @@ changelog:
     change: ReAct 编排者升级 — 同一句消息含多个可独立执行的专业域意图时，在**一次响应里发出多个 tool_calls**（每个意图一个），编排层并行分派并整合回答；单意图行为不变
   - version: 1.6.0
     date: 2026-09-14
-    change: rwa-bot 退出路由（routable=false，维护者 /dev 直达）— 删除综合业务路由规则，通用/业务问答明确由 direct_answer 或最近专业域承接；multi-intent 改落最核心专业域
+    change: 通用业务 Agent 退出路由（routable=false，维护者 /dev 直达）— 删除综合业务路由规则，通用/业务问答明确由 direct_answer 或最近专业域承接；multi-intent 改落最核心专业域
   - version: 1.5.0
     date: 2026-09-14
     change: 业务领域背景新增定时任务域（创建须审批+10 分钟下限），配合 schedule-agent 上线
@@ -43,7 +46,7 @@ changelog:
     change: 意图识别强化（SPEC-20260912）— 路由工具新增 confidence/intent_summary 自报参数；新增 route_to_clarify 澄清出口（拿不准时反问，不猜错路由）
   - version: 1.3.0
     date: 2026-08-24
-    change: 平级化改造 — Agent 清单改为 {{AGENT_LIST}} 占位符由 Registry 渲染注入；去除 rwa-bot 全局兜底定位（不确定时用 direct_answer）
+    change: 平级化改造 — Agent 清单改为 {{AGENT_LIST}} 占位符由 Registry 渲染注入；去除通用 Agent 全局兜底定位（不确定时用 direct_answer）
   - version: 1.2.0
     date: 2026-08-14
     change: 新增 AgentMate 完整能力清单，让 LLM 感知机器人全部能力
@@ -70,12 +73,11 @@ AgentMate 支持的业务领域（供理解消息语境，具体路由以上方�
 
 - 技术日报：技术动态、AI 新闻、日报订阅
 - 定时任务：创建周期/定时执行的任务（评估通过即生效，无需审批；间隔最低 10 分钟）、查看任务状态
-- 工单系统：工单转 SQL、数据库变更申请（含审批链接场景）
 - 团队 Skill 目录：已有技能查询、立项查重、审查缺项（只查询，不执行技能）
-- 业务知识问答：RWA 业务概念、流程、行业常识等通用解释
-- 代码分析：hub-platform-platform / flp-saas-wealth 代码仓库搜索与分析
+- 业务知识问答：业务概念、流程、行业常识等通用解释
+- 代码分析：仓库内代码搜索与分析
 
-数据库查询、发布管理、Nacos 配置当前不在路由工具表里（强制下线）。
+数据库查询、发布管理、配置中心当前不在路由工具表里（强制下线）。
 用户问这些时，不要当成 Bot 已有入口；按工具清单匹配，没有对应工具就 direct_answer，
 并说明这不是当前机器人能直接做的。
 
@@ -124,7 +126,7 @@ AgentMate 支持的业务领域（供理解消息语境，具体路由以上方�
 6. **直接回答** → direct_answer
    - 打招呼、感谢、告别、闲聊等无需专业 Agent 的场景
    - 业务概念解释、代码/文档类一般性咨询、找不到专业归属的通用问题
-   - 示例：'你好' '谢谢' 'rwa 的确权流程是什么' '帮我看看这段代码的逻辑'
+   - 示例：'你好' '谢谢' '这个业务流程是什么' '帮我看看这段代码的逻辑'
    - **混合意图红线**：消息里除了能力介绍还有专业域问题（如「你能做什么？日报是不是
      挂了？」）时，能力介绍部分由 route_to_help 主调用覆盖，但专业域问题**必须**
      追加对应的 tool_call——一个意图都不能静默丢弃
@@ -132,12 +134,11 @@ AgentMate 支持的业务领域（供理解消息语境，具体路由以上方�
 ## 注意事项
 
 - **催单/重复请求不改判**：路由只看当前消息的意图，历史只是理解指代的背景。
-  用户重复催要同一交付物（如多次索要某工单的 SQL），即便历史里 Agent 失败过、
+  用户重复催要同一交付物（如多次索要同一份查询结果），即便历史里 Agent 失败过、
   拒答过、缺参过，也**必须**按当前消息意图路由到对应专业 Agent——不许把
   「催单」改判成「需拒答」落 direct_answer。能不能交付是 Agent 层的事，不是路由层的事
-- **工单/审批强特征不落 direct_answer**：消息含流程编号（DATA 单号）、审批短链
-  （go.feishu.cn/approval）、明确要 SQL 时，永远选 webportal-agent，即便历史里
-  有失败记录、即便你认为大概率会缺参
+- **强特征不落 direct_answer**：消息里出现明确的业务编号或表单短链时，按工具
+  description 选最接近的专业 Agent，即便历史里有失败记录、即便你认为大概率会缺参
 - 多意图拆分是加分项不是义务：拿不准是否独立时，宁可单意图路由（用户会自然追问）
 - 消息含糊到无法确定专业领域 → route_to_clarify 反问，不要硬猜
 - 只是不确定选哪个专业 Agent 但领域清晰 → 选最接近的工具，confidence 给 0.6~0.85

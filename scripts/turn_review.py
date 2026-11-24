@@ -2,7 +2,7 @@
 
 用法（项目根）：
     python scripts/turn_review.py --days 7                     # 最近 7 天全部
-    python scripts/turn_review.py --tool webportal             # 碰过工单能力的轮次
+    python scripts/turn_review.py --tool read_doc             # 碰过读文档的轮次
     python scripts/turn_review.py --status no_response         # 没答上来的
     python scripts/turn_review.py --task demo-001              # 打印某一轮全文
     python scripts/turn_review.py --dir temp/turns-demo        # 指定轨迹目录（演练用）
@@ -26,7 +26,7 @@ from app.observability.turn_trace import TurnTraceRecorder  # noqa: E402
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="会话轨迹检索")
     ap.add_argument("--days", type=int, default=7)
-    ap.add_argument("--tool", default="", help="工具名子串（如 webportal / skill）")
+    ap.add_argument("--tool", default="", help="工具名子串（如 read_doc / skill）")
     ap.add_argument("--status", default="", help="success / error / no_response")
     ap.add_argument("--chat", default="", help="只看某个会话")
     ap.add_argument("--limit", type=int, default=50)
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(f"{'时间':19} {'状态':12} {'耗时':>8}  {'工具链':36} 问题")
     for r in rows:
-        # 只显示末段（`mcp__capabilities__watch_cmdb_order` → `watch_cmdb_order`），
+        # 只显示末段（`mcp__capabilities__list_tasks` → `list_tasks`），
         # 前缀都一样，占满宽度反而看不出调了什么
         tools = ",".join(t.split("__")[-1] for t in (r.get("tools") or []))[:36] or "-"
         print(f"{r.get('ts', '')[:19]} {r.get('status', ''):12} "

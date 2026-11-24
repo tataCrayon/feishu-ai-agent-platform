@@ -39,8 +39,7 @@ def extract_text(msg: Any) -> str:
     优先取调用方预取好的 `_prefetched_text`（main.on_message 异步拉完引用
     正文后 setattr 挂回）——aggregator worker 是同步循环，没法替它拉；
     不认这条，引用正文在 on_message 里算完也会被丢掉
-    （事故：工单正文丢失，LLM 拿历史里的
-    DATA2026092903 出了错单）。
+    （事故：引用正文丢失，模型拿历史里的旧上下文作答）。
     """
     prefetched = getattr(msg, "_prefetched_text", None)
     if isinstance(prefetched, str) and prefetched.strip():
@@ -157,7 +156,7 @@ class MessageAggregator:
                 if not texts:
                     continue
 
-                # 整批附件合并到 last_msg：下游（webportal 聚合分派的附件下载）
+                # 整批附件合并到 last_msg：下游（聚合分派的附件下载）
                 # 只认最后一条消息的 resources，而用户习惯「先发文件、后发指令」
                 # ——末条常是无附件的文本（3 个 .msg + 表单文本同批到达时附件会全丢，
                 # 引擎收到空描述）。按 file_key 去重合并；

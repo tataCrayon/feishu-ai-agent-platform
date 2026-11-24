@@ -9,7 +9,6 @@
 Agent 执行通道（transport，声明于 bot/agents/*/agent.yaml）：
 - handler:      进程内 Python Handler（app/agents/handlers/，自动发现注册）
 - cc_connect:   Claude Code 执行通道（cc-connect 桥接，与 handler 平级的普通通道）
-- webportal:    WebPortal Pipeline API 直连
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ from langgraph.graph import END, StateGraph
 from app.agents.handlers import AgentHandlerRegistry
 from app.agents.registry import AgentRegistry
 from app.config import RouterConfig
-from app.domains.webportal.client import WebPortalClient
 from app.observability.task_record import (
     TaskRecord,
     decision_recorder,
@@ -112,7 +110,7 @@ def set_attachment_downloader(fn):
 
 
 def set_recent_file_channel(channel):
-    """注入 channel，供工单链路回看同一发送者最近 2 分钟的群文件。"""
+    """注入 channel，供聚合链路回看同一发送者最近的群文件。"""
     global _recent_file_channel
     _recent_file_channel = channel
 
@@ -127,7 +125,7 @@ def set_late_delivery_sender(fn):
     _late_delivery_sender = fn
 
 
-# 进程内通道（handler/webportal）超时转后台后，仍在跑的任务引用（防 GC）。
+# 进程内通道超时转后台后，仍在跑的任务引用（防 GC）。
 # 与 cc-connect 的后台守望同一语义：不砍掉已在做的事，先让出并发额度 + 给用户
 # 一句诚实回执，真结果落好后直发原会话。
 _detached_tasks: set[Any] = set()
@@ -237,21 +235,18 @@ class CrewOrchestrator:
         config: 路由配置。
         registry: AgentRegistry，transport/guard/help 清单的数据源。
         handler_registry: AgentHandlerRegistry，进程内 Python Handler 注册表。
-        webportal_client: WebPortal 客户端（可选）。
     """
 
     def __init__(
         self,
         cc_client: CCConnectClient | None,
         config: RouterConfig,
-        webportal_client: WebPortalClient | None = None,
         registry: AgentRegistry | None = None,
         handler_registry: AgentHandlerRegistry | None = None,
         memory_client: Any | None = None,
     ):
         self._cc_client = cc_client
         self._config = config
-        self._webportal_client = webportal_client
         self._registry = registry
         self._handler_registry = handler_registry or AgentHandlerRegistry()
         # MemoryCore 客户端（可选）：路由前召回用户长期记忆注入路由上下文
@@ -261,7 +256,6 @@ class CrewOrchestrator:
         self._dispatchers: dict[str, Callable[..., Awaitable[tuple[str, str | None]]]] = {
             "handler": self._run_handler_agent,
             "cc_connect": self._run_cc_connect_agent,
-            "webportal": self._run_webportal_agent,
         }
         # 专属领域集合：从 agent.yaml 的 exclusive_domain 声明派生（数据驱动）
         self._exclusive_agents = exclusive_domain_agents(registry)
@@ -314,7 +308,7 @@ class CrewOrchestrator:
             session_key: session key，不传则自动构建。
             trace_id: TraceContext.trace_id。
             span_id: TraceContext.span_id。
-            message_obj: InboundMessage（含 resources 附件），用于 webportal 附件透传。
+            message_obj: InboundMessage（含 resources 附件），用于附件下载与透传。
             media_bundle: MediaBundle 多模态媒体包（图片/视频 base64、文档文本），
                 供路由/自答/判定 LLM 直接"看"媒体；None = 纯文本消息。
             on_routed: 路由决策回调 async fn(agent_display)，router 出结果后调用；
@@ -594,8 +588,8 @@ class CrewOrchestrator:
 
     # ── 多轮对话聚合 ──────────────────────────────────────────────
     #
-    # 说明：工单场景的「跨轮文本+附件累积」内聚到
-    # WebportalHandler._aggregate（app/agents/handlers/webportal_handler.py）。
+    # 说明：「跨轮文本+附件累积」内聚到提供 run_with_message 的 Handler
+    # （见下），主链路只管把历史递下去；
     # SessionHistory（_history）仍是全局语义历史的唯一事实源，供路由/子 Agent 承接上下文。
 
     def _allow_tool_call(self, session_key: str) -> bool:
@@ -1107,7 +1101,7 @@ class CrewOrchestrator:
         if self._handler_registry.has_handler(agent_name):
             handler = self._handler_registry.get(agent_name)
             # 调用方上下文透传：并行分派的 handler 同样跑在消息链路里
-            # （webportal-agent 发图、schedule-agent 建任务都依赖 chat_id）
+            # （发图、建任务这类后续动作都依赖 chat_id）
             from app.orchestrator.context import set_caller_context
 
             set_caller_context({
@@ -1173,21 +1167,18 @@ class CrewOrchestrator:
             logger.warning("Handler '%s' failed: %s", role_name, e)
             return "", str(e)[:100]
 
-    async def _run_webportal_agent(
+    async def _run_aggregated_handler(
         self, role_name: str, query: str, state: AgentState
     ) -> tuple[str, str | None]:
-        """工单 → SQL 聚合分派（webportal-order-agent A2A，经 Handler 执行）。
+        """需要多轮聚合 + 附件透传的 Handler 走本分派（提供 run_with_message 的）。
 
-        transport=handler 后 _make_agent_node 对提供 run_with_message 的
-        Handler 走本分派（webportal-agent 唯一消费者）；多轮聚合在
-        WebportalHandler.run_with_message 内完成，附件以文件形式随 A2A
-        消息携带（服务端解析），这里只负责下载附件（本轮消息 resources）并透传。
+        聚合逻辑内聚在 Handler 的 run_with_message 里，这里只负责把本轮消息
+        原文、附件与历史递进去，并把进度回调原样透传/还原。
 
         输入取用户本轮消息**原文**而非路由改写 query：路由 LLM 会把同会话
-        历史与长期记忆（跨会话旧任务）织进 query 参数污染工单描述
-        （实测：merge-check 旧任务混入 ticket_text 误导案例检索，
-        引擎被带偏到 advisory 路径）。Handler 自带会话聚合缓冲（TTL 10 分钟），
-        多轮上下文不依赖路由改写。
+        历史与长期记忆（跨会话旧任务）织进 query 参数，把上一件事的描述混进
+        这一件（实测：旧任务混入后执行面被带偏）。Handler 自带会话聚合缓冲
+        （TTL 10 分钟），多轮上下文不依赖路由改写。
         """
         handler = self._handler_registry.get(role_name)
         run_with = getattr(handler, "run_with_message", None)
@@ -1235,7 +1226,7 @@ class CrewOrchestrator:
                 if callable(set_progress):
                     set_progress(prev_progress_cb)  # 还原，防跨消息串回调
 
-        # 无聚合入口的 webportal Handler（未来接入其他引擎时）走标准路径
+        # 没有聚合入口的 Handler 走标准路径
         try:
             response = await handler.run(query, state.get("history") or [])  # type: ignore[union-attr]
             if response:
@@ -1314,7 +1305,7 @@ class CrewOrchestrator:
     ) -> tuple[str, str | None]:
         """进程内通道两级时限：>90s 转后台，>agent.yaml 的 timeout_sec 才真放弃。
 
-        为什么要两级：实测最长任务 1100s（webportal p50=145s），而分派处此前
+        为什么要两级：实测最长任务可到 1100s，而分派处此前
         **没有任何超时**（agent.yaml 的 timeout_sec 只解析不消费），长任务一路占住
         并发闸额度 → 后面的消息排队到 queue_timeout 回「系统繁忙」，用户体感就是
         「任务经常中断」。这里对齐 cc-connect 已有的后台守望语义：到点先让出额度
@@ -1400,12 +1391,12 @@ class CrewOrchestrator:
             # handler 运行时注册优先于 transport 声明
             used_cc_connect = False
             if self._handler_registry.has_handler(role_name):
-                # webportal-agent 的聚合/附件语义挂在 Handler 的 run_with_message：
+                # 聚合/附件语义挂在 Handler 的 run_with_message：
                 # 提供该入口的 Handler 走聚合分派（多轮连发 + 附件转文本），
-                # 普通 Handler 仍走标准 run()
+                # 其余 Handler 仍走标准 run()
                 if callable(getattr(self._handler_registry.get(role_name), "run_with_message", None)):
                     resp, err = await self._inproc_with_deadline(
-                        role_name, self._run_webportal_agent(role_name, query, state), state)
+                        role_name, self._run_aggregated_handler(role_name, query, state), state)
                 else:
                     resp, err = await self._inproc_with_deadline(
                         role_name, self._run_handler_agent(role_name, query, state), state)
@@ -1604,7 +1595,7 @@ class CrewOrchestrator:
                 core.append(agent)
 
         lines = [
-            f"{greeting}！我是**中台核心组数字助手**。",
+            f"{greeting}！我是**团队数字助手**。",
             "",
             "**我能帮你**",
         ]
@@ -1865,7 +1856,6 @@ class CrewOrchestrator:
 def create_orchestrator(
     cc_client: CCConnectClient,
     config: RouterConfig,
-    webportal_client: WebPortalClient | None = None,
     registry: AgentRegistry | None = None,
     handler_registry: AgentHandlerRegistry | None = None,
 ) -> CrewOrchestrator:
@@ -1873,7 +1863,6 @@ def create_orchestrator(
     return CrewOrchestrator(
         cc_client=cc_client,
         config=config,
-        webportal_client=webportal_client,
         registry=registry,
         handler_registry=handler_registry,
     )

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,27 +32,6 @@ from app.prompts.loader import PromptLoader
 
 logger = logging.getLogger("orchestrator.router")
 
-# ── 确定性路由兜底（工单域）────────────────────────────────────────
-
-# lark_channel 的纯文件消息占位符（如 <file key="..." name="xx.msg"/>）
-_FILE_TAG_RE = re.compile(r'<file\s+key="[^"]*"(?:\s+name="([^"]*)")?\s*/>')
-
-# 工单强特征：流程编号 / CMDB DATA 单号 / 明确的工单-SQL 意图 / 审批短链
-# （go.feishu.cn/approval 与「处理这个审批」裸链也须确定性兜住；案例链
-#   沉淀案例/案例入库/同步案例话术同理）
-_TICKET_HINT_RE = re.compile(
-    r"流程编号|DATA\d{6,}|处理.{0,6}(?:工单|审批)|工单.{0,6}(?:转|生成|处理|执行|方案)|"
-    r"(?:生成|出|给我?)\s*(?:完整|全部)?\s*SQL|SQL\s*(?:生成|变更|方案)|"
-    r"go\.feishu\.cn/approval|审批.{0,6}(?:链接|短链|单据)|"
-    r"沉淀.{0,6}案例|案例.{0,4}(?:入库|沉淀|同步)|同步.{0,4}案例|录入.{0,4}案例",
-    re.IGNORECASE,
-)
-
-# 工单常见附件类型（与 channel 下载白名单求交，图片不属于——图片更多是
-# 数字先知/截图问询场景，继续交给 LLM 路由判断）
-_TICKET_FILE_EXTS = {".msg", ".eml", ".txt", ".md", ".csv", ".xlsx", ".xls",
-                     ".doc", ".docx", ".pdf", ".sql", ".log"}
-
 # ── 路由工具定义（OpenAI Function Calling 格式，registry 单源派生）──────────
 
 # 编排层内置目标（非 registry Agent）：帮助清单 / 自答引擎
@@ -70,7 +48,7 @@ _BUILTIN_TOOL_SPECS: tuple[tuple[str, str, dict | None, list[str]], ...] = (
         "direct_answer",
         "直接回答（编排层自答）：问候、感谢、告别、闲聊，以及不需要专业 Agent 的通用问题"
         "——常识问答、概念解释、一般性讨论、对上一轮回复的简单追问。"
-        "专业领域（数据库/发布/配置/工单/日报/文档/代码分析）不要用此工具",
+        "专业领域（数据库/发布/配置/日报/文档/代码分析）不要用此工具",
         {
             "reply": {
                 "type": "string",
@@ -91,7 +69,7 @@ _BUILTIN_TOOL_SPECS: tuple[tuple[str, str, dict | None, list[str]], ...] = (
             "candidates": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "1-3 个候选方向的语义描述，如 ['数据库查询','工单创建']",
+                "description": "1-3 个候选方向的语义描述，如 ['数据库查询','发布状态']",
             },
         },
         ["question"],
@@ -290,47 +268,6 @@ class RouterLLM:
                 entries.append(f"- {agent}（{tool}）")
         return prompt.replace("{{AGENT_LIST_DECOMPOSE}}", "\n".join(entries))
 
-    # ── 确定性工单兜底 ────────────────────────────────────────────
-
-    def _ticket_result(
-        self, message: str, latency_ms: float, reason: str,
-        *, require_hint: bool,
-    ) -> RouterResult | None:
-        """工单特征命中 → webportal-agent 路由结果；不命中返回 None。
-
-        require_hint=False（纯附件场景）：仅凭「工单文档类附件」即可命中；
-        require_hint=True（LLM 失败兜底）：须再命中工单关键词，避免把闲聊
-        误送进引擎。confidence 取 0.85（> clarify_threshold 0.6，不降级）。
-        """
-        tool = "route_to_webportal_agent"
-        if tool not in self._agent_name_map:
-            return None
-
-        names = _FILE_TAG_RE.findall(message)
-        stripped = _FILE_TAG_RE.sub("", message).strip()
-
-        if not stripped:
-            # 纯附件消息：全部为工单文档类才确定性命中
-            if not names:
-                return None
-            exts = {("." + n.rsplit(".", 1)[-1].lower()) if "." in n else ""
-                    for n in names}
-            if not exts or not exts <= _TICKET_FILE_EXTS:
-                return None
-        elif not require_hint or not _TICKET_HINT_RE.search(message):
-            return None
-
-        intent = "工单附件/工单描述（确定性路由）"
-        logger.info("Deterministic ticket route: %s — reason=%s", tool, reason)
-        return RouterResult(
-            tool_name=tool,
-            args={"query": message, "confidence": 0.85, "intent_summary": intent},
-            latency_ms=latency_ms,
-            is_fallback=True,
-            confidence=0.85,
-            intent_summary=intent,
-        )
-
     async def route(
         self,
         message: str,
@@ -353,15 +290,6 @@ class RouterLLM:
             RouterResult 包含路由工具名和参数。
         """
         start = time.time()
-
-        # 纯工单附件消息（LLM 前的确定性规则）：附件必须进 webportal handler
-        # 的聚合缓冲——走 clarify 则附件永不落缓冲，后续文字消息出单时丢附件
-        # （事故形态：Setup Mobile Number.msg 被判「解析失败」转 clarify，
-        # 工单正文到达时引擎已无附件上下文）
-        pre = self._ticket_result(message, 0.0, "file-only pre-route",
-                                  require_hint=False)
-        if pre:
-            return pre
 
         try:
             # 使用 build_cacheable_messages 构建前缀可缓存的 messages，
@@ -423,10 +351,6 @@ class RouterLLM:
                         "Router LLM returned unknown tool(s) %r",
                         [tc.function.name for tc in choice.message.tool_calls],
                     )
-                    fb = self._ticket_result(message, latency_ms,
-                                             "unknown-tool", require_hint=True)
-                    if fb is not None:
-                        return fb
                     logger.warning(
                         "Router LLM returned unknown tool(s) — fallback to direct_answer")
                     return RouterResult(
@@ -444,25 +368,6 @@ class RouterLLM:
                 args = primary["args"]
                 confidence = primary["confidence"]
                 intent_summary = primary["intent_summary"]
-
-                # 确定性工单改判（LLM 合法自选
-                # direct_answer conf=0.9「需拒答」，被会话历史里的旧失败带偏）：
-                # 消息命中工单强特征且多意图里也没有 webportal 调用时，改判送
-                # webportal-agent——催单/重复请求不因历史失败改判为拒答。
-                # 只换主调用，extra_calls 保留（第二意图照常并行分派）。
-                if (
-                    tool_name == "direct_answer"
-                    and not any(
-                        t["tool_name"] == "route_to_webportal_agent"
-                        for t in extra_calls
-                    )
-                ):
-                    fb = self._ticket_result(
-                        message, latency_ms, "hint-override", require_hint=True)
-                    if fb is not None:
-                        if extra_calls:
-                            fb.extra_calls = extra_calls
-                        return fb
 
                 if extra_calls:
                     logger.info(
@@ -488,14 +393,7 @@ class RouterLLM:
                     extra_calls=extra_calls,
                 )
 
-            # LLM 未调用工具 → 先确定性识别工单/审批消息（与 LLM 失败兜底同
-            # 语义；审批单曾在这里被误送 direct_answer），兜不住才
-            # direct_answer 自答（诚实自答优于乱兜底）
-            logger.warning("Router LLM returned no tool call")
-            fb = self._ticket_result(message, latency_ms,
-                                     "no-tool-call", require_hint=True)
-            if fb is not None:
-                return fb
+            # LLM 未调用工具 → direct_answer 自答（诚实自答优于乱兜底）
             logger.warning("Router LLM returned no tool call — fallback to direct_answer")
             return RouterResult(
                 tool_name="direct_answer",
@@ -514,18 +412,6 @@ class RouterLLM:
             # N+1 次×timeout_sec——日志里的 latency 超过 timeout_sec 即发生了
             # SDK 静默重试，attempt 数只能从错误信息反推（APITimeoutError 带尝试次数）
             err_name = type(e).__name__
-            # 网关抖动是常态（Router LLM 连接失败 103s 后回
-            # direct_answer 废话，用户的工单没人接）。先确定性识别工单消息
-            # 直送 webportal-agent，兜不住才回 direct_answer。
-            fb = self._ticket_result(message, latency_ms,
-                                     f"llm-failed({err_name})", require_hint=True)
-            if fb is not None:
-                logger.warning(
-                    "Router LLM failed (%.0fms, err=%s): %s — deterministic "
-                    "fallback → webportal-agent",
-                    latency_ms, err_name, str(e)[:200],
-                )
-                return fb
             logger.warning(
                 "Router LLM failed (%.0fms, err=%s): %s — fallback to direct_answer",
                 latency_ms, err_name, str(e)[:200],

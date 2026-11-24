@@ -124,14 +124,14 @@ async def t3_route_agent_reachable() -> tuple[bool, str]:
     async def fake_dispatcher(role, query, state):
         called["role"] = role
         called["query"] = query
-        return "已查询 t_rwa_product 表结构：包含 id、product_name、nav、status 等字段", None
+        return "已查询该表结构：包含 id、name、status 等字段", None
 
     orch._dispatchers["cc_connect"] = fake_dispatcher
     resp = await orch.execute(
-        message="查一下 t_rwa_product 表结构", chat_id="oc_e2e", sender_id="ou_test",
+        message="查一下这张表的结构", chat_id="oc_e2e", sender_id="ou_test",
         sender_name="测试", trace_id="e2e-route-001",
     )
-    ok = called.get("role") == "db-agent" and "t_rwa_product" in resp
+    ok = called.get("role") == "db-agent" and "表结构" in resp
     return ok, f"dispatched={called.get('role')}, resp={resp[:40]!r}"
 
 

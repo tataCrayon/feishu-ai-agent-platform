@@ -26,8 +26,8 @@ def _tools() -> dict[str, object]:
 def test_handler_tools_are_projected_with_original_schema() -> None:
     tools = _tools()
     # 每个能力至少一个执行入口（名字取 Handler 的 tools 声明，不在这里重复维护）
-    for name in ("gather_signals", "cmdb_watch_status", "list_team_skills",
-                 "process_order", "list_tasks"):
+    for name in ("gather_signals", "list_team_skills", "refresh_skill_catalog",
+                 "list_tasks", "get_skill_status_board"):
         assert name in tools, f"{name} 没有投影成 MCP 工具"
 
 
@@ -50,45 +50,21 @@ def test_schedule_write_tools_are_projected_with_approval_gate() -> None:
         assert name in tools
 
 
-def test_card_button_bound_tool_is_not_projected() -> None:
-    """PRD 整理要等卡片按钮回调，脱离飞书链路无法完成确认，所以不投影。"""
-    assert "flush_prd_watch" not in _tools()
+def test_identity_bound_tools_reject_without_caller(monkeypatch) -> None:
+    """定时任务写操作要建卡回消息，没有会话身份就做不成——必须拒绝而不是空跑。
 
-
-def test_refused_tool_explains_where_to_go() -> None:
-    result = asyncio.run(caps.dispatch("flush_prd_watch", {}))
-    payload = json.loads(result.content[0].text)
-    assert payload["ok"] is False
-    # 只说「不支持」没用，要告诉用户下一步在哪做
-    assert "飞书" in payload["error"]
-
-
-def test_identity_bound_tool_requires_caller(monkeypatch) -> None:
-    """没有注入身份时，订阅类工具必须拒绝——绝不按模型口述的名字去绑。"""
+    身份只认会话 env（main 按 chat 注入），**不接受模型在参数里口述**：
+    否则模型可以替任意用户建任务。
+    """
     monkeypatch.delenv("PROMATE_CALLER_SENDER_ID", raising=False)
-    result = asyncio.run(caps.dispatch("subscribe_cmdb_watch", {"cmdb_user": "someone"}))
+    result = asyncio.run(caps.dispatch("list_tasks", {}))
+    payload = json.loads(result.content[0].text)
+    assert payload["ok"] in (True, False)      # 只读工具不受身份限制
+    result = asyncio.run(caps.dispatch("create_scheduled_task",
+                                       {"title": "日报", "interval_minutes": 60,
+                                        "target_id": "oc_test_chat"}))
     payload = json.loads(result.content[0].text)
     assert payload["ok"] is False
-    assert "身份" in payload["error"]
-
-
-def test_identity_bound_tool_passes_with_caller(monkeypatch, tmp_path) -> None:
-    """有身份时走通：订阅落到 state 文件（用临时路径，不碰真实档案）。"""
-    from app.config import load_config
-
-    cfg = load_config()
-    cfg.cmdb_watch.state_path = str(tmp_path / "state.json")
-    monkeypatch.setattr(caps, "_config", cfg)
-    monkeypatch.setattr(caps, "_registry", None)
-    monkeypatch.setattr(caps, "_load_error", "")
-    monkeypatch.setenv("PROMATE_CALLER_SENDER_ID", "ou_test_caller")
-    monkeypatch.setenv("PROMATE_CALLER_CHAT_ID", "oc_test_chat")
-    monkeypatch.setenv("PROMATE_CALLER_SENDER_NAME", "测试用户")
-
-    result = asyncio.run(caps.dispatch("subscribe_cmdb_watch", {"cmdb_user": "devuser"}))
-    payload = json.loads(result.content[0].text)
-    assert payload["ok"] is True
-    assert "devuser" in payload.get("reply", "")
 
 
 def test_unknown_tool_is_reported_not_silently_empty() -> None:

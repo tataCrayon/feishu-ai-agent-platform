@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """模型一键切换 — 把全仓模型触点收口成一条命令。
 
-背景：模型三要素虽单源在根 .env，但换模型仍要手动改 4 处
-（根 .env / 上游工单服务 .env / config.toml CC 映射 / MODEL_PRICES 定价表），
+背景：模型三要素虽单源在根 .env，但换模型仍要手动改 3 处
+（根 .env / config.toml CC 映射 / MODEL_PRICES 定价表），
 漏一处就出现「路由用新模型、CC 通道用旧模型」的口径分裂。本脚本原子改齐 +
 自动验证 + 打印回滚命令。
 
@@ -38,11 +38,12 @@ if sys.platform == "win32":
         pass
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
-# 工单 A2A 服务（webportal-order-agent）独立仓库 .env —— 引擎模型触点。
-# v3.0.0 去 vendor 后原 bot/skills/order-sql 两份 .env 随引擎迁出，
-# 触点改为上游仓库（本机 checkout，不存在时跳过不计入一致性）。
-UPSTREAM_ENV = Path(r"D:\Projects\vscode-projects\webportal-order-agent\.env")
-ENV_FILES = [PROJECT_DIR / ".env"] + ([UPSTREAM_ENV] if UPSTREAM_ENV.exists() else [])
+# 上游执行服务（独立仓库）的 .env 也是模型触点：本机 checkout 时把它的路径
+# 写进环境变量 UPSTREAM_ENV_FILE 才会被纳入一致性检查，不存在时跳过。
+_upstream = os.environ.get("UPSTREAM_ENV_FILE", "")
+UPSTREAM_ENV = Path(_upstream) if _upstream else None
+ENV_FILES = [PROJECT_DIR / ".env"] + (
+    [UPSTREAM_ENV] if UPSTREAM_ENV and UPSTREAM_ENV.exists() else [])
 CONFIG_TOML = PROJECT_DIR / "config.toml"
 CLIENT_PY = PROJECT_DIR / "app" / "llm" / "client.py"
 

@@ -11,7 +11,7 @@ display_name: "开发助手"
 # 平级化后 dev-bot 是 Claude Code 通用业务 Agent，不再标注"兜底"。
 description: "Claude Code 通用开发 Agent：代码搜索/分析、需求分析、飞书操作（文档/日历/审批）、知识资产查询、AI 咨询、代码仓库搜索(/findcode)、记忆(/memories)，以及 Skill 技能执行"
 permission_level: 0
-# Claude Code 执行通道（cc-connect 桥接）— 与 handler/webportal 等通道平级
+# Claude Code 执行通道（cc-connect 桥接）— 与 handler 通道平级
 transport: cc_connect
 # 不参与 LLM 路由（2026-09-14）：dev-bot 是维护者的远程开发通道（/dev 直达），
 # 不对团队用户开放——团队消息禁止消耗 Claude Code 会话。仍保留 enabled=true：

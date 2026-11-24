@@ -16,7 +16,7 @@
 | Q5 | memory 与 bot 一体（不再独立进程） | 已定 | P5 |
 | Q6 | 并行冲突：`app/domains/prd_watch`、`cmdb_watch` 由另一方持续开发 | 需确认边界 | P3/P5 |
 
-**Q6 边界**：`app/domains/{prd_watch,cmdb_watch,daily,webportal}` 属**业务域**，
+**Q6 边界**：`app/domains/*` 属**业务域**，
 本次重构只改它们的**调用入口**（handler → MCP 工具），不改域内逻辑。
 域内代码由另一方继续演进，双方通过 `app/mcp/` 的薄封装解耦。
 
@@ -67,7 +67,7 @@
 |---|---|---|
 | `mcp/feishu` | `send_message` / `read_doc` / `reply` | `gateway/channel/` + `lark_cli.py` |
 | `mcp/memory` | `recall` / `capture` / `session_end` | 见 P5 |
-| `mcp/domains` | webportal / daily / merge_check / schedule / skill_catalog / prd_watch / cmdb_watch / digital_oracle | `app/domains/`（薄封装，不加业务逻辑） |
+| `mcp/domains` | daily / schedule / skill_catalog / digital_oracle | `app/domains/`（薄封装，不加业务逻辑） |
 
 **三红线**：从提示词约束改为`mcp/feishu` 工具层硬拒（AC-3.2）。
 

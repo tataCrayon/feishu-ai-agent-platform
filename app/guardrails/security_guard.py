@@ -197,7 +197,7 @@ def check_command_permission(sender_id: str, command: str, args: str = "", chat_
         if not perms.get("deploy_read", False) and base_cmd not in ("deploy",):
             return {
                 "allowed": False,
-                "reason": f"L{level} ({perms.get('label', '游客')}) 无 CMDB 查看权限",
+                "reason": f"L{level} ({perms.get('label', '游客')}) 无发布查看权限",
                 "level": level,
                 "label": perms.get("label", "游客"),
                 "checks": checks,
@@ -356,7 +356,7 @@ def main():
 
     p_perm = sub.add_parser("check-perm", help="权限验证")
     p_perm.add_argument("--user", type=str, required=True, help="发送者 open_id")
-    p_perm.add_argument("--command", type=str, required=True, help="命令（如 /deploy run rwa-agent）")
+    p_perm.add_argument("--command", type=str, required=True, help="命令（如 /deploy run demo）")
     p_perm.add_argument("--chat", type=str, default="", help="群 chat_id")
     p_perm.add_argument("--json", action="store_true", help="JSON 输出")
 

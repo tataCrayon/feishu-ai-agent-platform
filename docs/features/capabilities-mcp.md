@@ -24,10 +24,9 @@ main.py::_process_batch → DshGateway.handle(chat_id, caller={sender_id,…})
 ## 3. 期望行为（可观察面）
 
 - 数字先知：`gather_signals` 真取市场数据（不再回答「没有执行入口」）
-- CMDB 提醒：订阅/关注/查状态，绑到**发这条消息的人**
+- 订阅类提醒：绑定/取消/查状态，**绑定到发这条消息的人**（身份不接受模型口述）
 - 定时任务：创建评估通过即纳入调度并回执卡片（**无审批门**，2026-11-08），暂停/恢复/取消按本人或 L2 鉴权
-- PRD 助手：查监听状态；「整理当前讨论」仍走飞书卡片链路（要等按钮回调）
-- 工单：`process_order` / `ingest_order` / 案例相关工具
+- 需要人工点按钮确认的整理动作不投影：走卡片链路，脱离飞书会话做不完
 - 团队 Skill 目录：盘点/查重/审查/状态板
 
 ## 4. 约束与不变量（改前必读）
@@ -56,7 +55,7 @@ main.py::_process_batch → DshGateway.handle(chat_id, caller={sender_id,…})
 ## 6. 证据锚点
 
 - 2026-11-05 实测：会话工具从 8 → 26 个（22 个能力工具 + feishu/domains 的 8 个），
-  数字先知 / CMDB / 定时任务 / 工单 / Skill 目录全部可达
+  数字先知 / 定时任务 / Skill 目录全部可达
 - 2026-11-05 实测：`create_scheduled_task` 真发审批卡（当天档案落 `logs/scheduled_tasks/pending/`、
   飞书会话内可见「定时任务审批」卡片）——该审批门已于 2026-11-08 按用户要求下线，
   新建任务直接落 `approved/`，残留 pending 由调度循环收编

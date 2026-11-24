@@ -71,13 +71,6 @@ class MemoryConfig:
 
 
 @dataclass
-class WebPortalConfig:
-    enabled: bool = True
-    base_url: str = "http://127.0.0.1:8000"
-    timeout_sec: int = 15
-
-
-@dataclass
 class CCConnectConfig:
     enabled: bool = True
     webhook_url: str = "http://127.0.0.1:9111/hook"
@@ -259,77 +252,6 @@ class RuntimeGuardConfig:
 
 
 @dataclass
-class CaseMirrorConfig:
-    """工单案例库飞书镜像 — 案例落盘后自动同步的写目标（user 写权限的收口点）。
-
-    案例沉淀（对话「沉淀案例 …」）在上游 cases/*.md 落盘后，把同一案例镜像到
-    飞书案例库：目录节点下建子文档 + 更新目录索引表，回读校验一致才算完成。
-    三个 token 是案例库坐标（与 webportal-order-agent 仓 case-ingest SKILL 步骤 8
-    记载一致）；换库只改配置不改代码。写入只允许挂 parent_node_token 下、
-    改 index_doc_token 这两个目标，调用方不得传任意 token。
-
-    Attributes:
-        enabled: 总开关；false = 不同步（ingest 仍落上游本地案例库）。
-        space_id: 案例库 wiki 空间 ID。
-        parent_node_token: 案例子文档父节点 token。
-        index_doc_token: 目录索引文档 token。
-        wiki_base_url: wiki 链接前缀（拼目录索引里的跳转链接）。
-    """
-
-    enabled: bool = True
-    space_id: str = ""
-    parent_node_token: str = ""
-    index_doc_token: str = ""
-    wiki_base_url: str = "https://example.feishu.cn/wiki"
-
-
-@dataclass
-class CmdbWatchConfig:
-    """CMDB 工单提醒 — 任何人自助订阅自己的工单，出现任务时私聊推卡片。
-
-    由 `app/domains/cmdb_watch` 的常驻轮询使用（旁路，不在消息路由里）；
-    `cmdb-watch-agent` 只负责订阅入口（见 app/agents/handlers/cmdb_watch_handler.py）。
-    Attributes:
-        enabled: 总开关；false = 不启动轮询循环，零网络开销。
-        base_url: CMDB 地址，工单卡片里的「查看工单」链接也由它拼。
-        state_path: 订阅者与观察状态的落盘路径（相对路径基于项目根）。
-        interval_sec: 轮询间隔，下限 60s（CMDB 内网按 5s 轮询的页面量级估算，60s 足够）。
-        scan_limit: 每轮最多拉多少张工单状态（含跟踪中的）；超出截断并告警。
-        probe_span: **无 session 时**用 id 顺序探测的跨度；0 = 只用工单列表接口
-            （列表接口需要 sessionid，见 client.py 抬头）。
-        probe_step: 列表接口可用时的探测宽度（id 已对齐到最新，只需看最近几张）。
-        session_id: CMDB sessionid。留空则读环境变量 CMDB_SESSION_ID 或 `~/.cmdb-session`
-            （与 cmdb-order-tracker skill 共用同一份，登录一次即可）。
-            后台**不会**自动登录：是否允许由环境变量 `CMDB_ALLOW_RELOGIN` 决定
-            （默认 confirm = 不登），见 `client.py` 抬头。
-        initial_scan: 首次启动时回溯探测多少张历史工单（0 = 只从现在往后看）。
-            朴素 id 探测下这是唯一能「找回刚创建但还没被轮询到的工单」的手段。
-        refresh_sec: 已跟踪工单的全量校准周期（秒）。平时只轮询轻量状态接口，
-            到这个间隔才把整张工单重读一遍，补齐 SQL/NACOS 状态与任务增删。
-        refresh_session_on_start: 启动时体检 CMDB 登录态。登录过期不致命（列表入口
-            会被拒、自动退回 id 探测），但会让新工单发现晚一轮，所以启动日志要说清楚。
-        watch_error_limit: 指定工单关注连续拉取失败多少轮后自动停止（工单被删/
-            权限回收时不该无限重试）。
-    """
-
-    enabled: bool = False
-    base_url: str = "http://cmdb.example.com"
-    state_path: str = "logs/cmdb_watch/state.json"
-    interval_sec: int = 120
-    scan_limit: int = 30
-    probe_span: int = 30
-    probe_step: int = 3
-    session_id: str = ""
-    initial_scan: int = 10
-    refresh_sec: int = 900
-    refresh_session_on_start: bool = True
-    watch_error_limit: int = 5
-
-    def resolved_base_url(self) -> str:
-        return self.base_url.rstrip("/")
-
-
-@dataclass
 class ScheduledTasksConfig:
     """定时任务调度配置 — 评估通过即生效（无审批门），扫描间隔 ≥10 分钟。
 
@@ -373,139 +295,6 @@ class SkillCatalogConfig:
 
 
 @dataclass
-class PrdWatchConfig:
-    """easyprd PRD 变更监听 — 群讨论/妙记 → 变更点 → PRD 评论 → 决策闭环。
-
-    格式契约与不变量：docs/features/easyprd-prd-watch.md
-
-    Attributes:
-        enabled: 总开关。false = 旁路不注册，主链路零开销（默认关，配好台账再开）。
-        watch_chats: 白名单群 chat_id。**只有这里的群**才会放开「非@消息也收」，
-            其余群的准入行为完全不变——放开全量监听是隐私敏感动作，必须逐群显式授权。
-        window_sec: 讨论攒窗口（秒）。窗口内多条消息合并成一批送识别，一次讨论
-            只出一张卡片，禁止逐条刷屏。
-        extract_min_confidence: 变更识别下限。低于此值直接丢弃并计数。
-        extract_flag_confidence: 标 ⚠️ 上限。介于 min 与此值之间 → 写评论但标注
-            「AI 自动识别，请人工确认」；高于此值按正式变更出。
-        poll_replies_sec: 评论回复轮询间隔（决策闭环走轮询，评论事件订阅未接线）。
-        decision_ttl_days: pending 超过该工作日数提醒一次，不重复催。
-        dry_run: true = 只识别落日志，不真写评论、不发卡片（灰度第一步，看误报率）。
-        ledger_base_token / ledger_change_table / ledger_bind_table: 多维表格坐标。
-            任一为空 → 台账功能关闭（不猜、不用默认值），变更只进日志。
-        comment_identity: 评论读写用 `bot` 还是 `user`。bot 优先——署名是应用，
-            追溯比「像同事说的」清楚；但 bot 要能评论，应用必须先是该文档/空间的
-            协作者，否则真实调用返回 `1069303 Access denied`（读都读不到，
-            返回 `3380004 No permission`），而这一步只能由文档 owner 授予。
-            切 `user` 则评价身份本人的登录态需同时具备
-            `docs:document.comment:create` / `:write_only` / `:read` 三个 scope。
-        meegle_simple_name: 飞书项目空间 simple_name（Story 与 PRD 链接的事实源）。
-            空 = 不接 Meegle，绑定全走多维表格（老路径）。凭证只从 .env 的
-            MEEGLE_USER_TOKEN / FEISHU_MCP_TOKEN 或 ~/.claude/feishu_token.txt 读，
-            **绝不在本配置里写 token**——那是个人在飞书项目的全部读权限。
-        story_chat_map: StoryID → 群 chat_id。Meegle 上没有「需求对应哪个群」，
-            靠群名模糊匹配 = 写错 PRD 的风险，所以这一项必须管理员显式给。
-        prd_field / task_doc_field: Story 上 PRD 链接的字段 key（实测 examplecorp 空间
-            「需求文档」= field_c56ee5，「任务文档」= wiki）；换空间时改这里。
-        minutes_identity: 读妙记用 user / bot。实测 bot 未被 scope 挡
-            （假 token 返回 resource not found 而非 app_scope_not_applied），
-            user 侧 minutes:minute 是否已授权取决于登录态 —— 两边都留口子，
-            失败时把缺的 scope 原样报出来，不静默跳过会议素材。
-        minutes_poll_sec: 妙记轮询间隔（妙记生成事件是 user 身份，bot 长连接收不到）。
-        minutes_story_map: minute_token → StoryID 的显式映射（配置里写死）。
-            **不做自动发现**：`minutes +search` 需 scope `minutes:minutes.search:read`
-            （当前登录态缺失），且「哪场会对应哪个需求」属于人工台账，
-            让 bot 靠会议标题猜需求是设计稿明令禁止的猜测行为。
-        minutes_base_url / notes_base_url: 妙记与智能纪要 docx 的可点链接前缀，
-            卡片「变更依据」靠它拼出能点开的来源。留空 = 没有链接（不猜租户域名）。
-            实测：他人拥有的妙记 `+detail` 返回 `No read permission`，
-            而会议自动生成的**智能纪要 docx 两种身份都能读** → 会议素材优先用纪要，
-            此时卡片来源链接就是 `{notes_base_url}/{obj_token}` 那种形态。
-        cr_base_token / cr_table: easyprd **自建**的 CR 表坐标（评论 id、决策状态、
-            置信分带）。与需求知识台账的「变更记录」表分开：那是时序归档，这是待办
-            状态机。为空时用内存替身，状态面板会明说「决策状态只在内存里」。
-        kb_base_token / kb_*_table: 需求知识台账（req-knowledge-ledger 内化）的 base
-            与三张表；表 id 留空取 examplecorp 空间默认值。
-        figma_token: UI 对账用的 Figma 只读 token（也接受 .env 的 FIGMA_API_KEY）。
-        meeting_auto / meeting_scan_sec / meeting_scan_days / meeting_scan_limit:
-            是否按需求名核心词自动搜妙记并整理（默认关；关掉时只支持手动贴链接）。
-    """
-
-    enabled: bool = False
-    watch_chats: list[str] = field(default_factory=list)
-    window_sec: float = 300.0
-    extract_min_confidence: float = 0.7
-    extract_flag_confidence: float = 0.85
-    poll_replies_sec: int = 120
-    decision_ttl_days: int = 3
-    dry_run: bool = True
-    ledger_base_token: str = ""
-    ledger_change_table: str = ""
-    ledger_bind_table: str = ""
-    comment_identity: str = "bot"
-    meegle_simple_name: str = ""
-    story_chat_map: dict[str, str] = field(default_factory=dict)
-    prd_field: str = "field_c56ee5"
-    task_doc_field: str = "wiki"
-    minutes_identity: str = "user"
-    minutes_poll_sec: int = 1800
-    minutes_story_map: dict[str, str] = field(default_factory=dict)
-    # 妙记可点链接前缀（例 `https://xxx.feishu.cn/minutes`），卡片「变更依据」用它拼
-    # `{base}/{minute_token}`。**留空 = 卡片只有来源文字、没有链接**——域名是租户私有
-    # 信息，绝不拿 token 猜一个出来（链不上的链接在卡片上看不出来，比没链接更糟）。
-    minutes_base_url: str = ""
-    # 智能纪要（会议自动生成的 docx）链接前缀，同上规则。实测：妙记本体常无读权限，
-    # 而纪要 docx 两种身份都能读，所以会议素材优先走纪要 → 这个前缀也留着。
-    notes_base_url: str = ""
-    # CR 台账（**本能力自建**的「PRD变更建议CR」表）：评论 id / 决策状态 / 分带落在这里。
-    # 与需求知识台账的「变更记录」表分开——那是时序归档，这是待办状态机，混一起会让
-    # 「已采纳」被写进叙事字段。坐标为空 → 用内存替身，状态面板会明说「只在内存里」。
-    cr_base_token: str = ""
-    cr_table: str = ""
-    # 需求知识台账（req-knowledge-ledger 内化）的 base 与三张表。表 id 留空取默认
-    # （examplecorp 空间现行建表形态，与线上一致）。
-    kb_base_token: str = ""
-    kb_story_table: str = ""
-    kb_meeting_table: str = ""
-    kb_change_table: str = ""
-    # 本地台账（SQLite）。开 = 三张表（绑定 / CR / 知识地图）落 `logs/prd_watch/ledger.db`，
-    # 不再需要任何多维表格坐标；base 坐标即使配着也不会被读（避免两个事实源）。
-    # 路径留空 = `logs/prd_watch/ledger.db`（相对仓库根，与运行产物同域，已 gitignore）。
-    local_ledger: bool = True
-    local_ledger_path: str = ""
-    # Figma 只读 token（UI 对账用）。也接受 .env 的 FIGMA_API_KEY / FIGMA_TOKEN。
-    figma_token: str = ""
-    # 会议自动扫描：按需求名核心词搜妙记并整理（不配 = 只支持手动贴链接）
-    meeting_auto: bool = False
-    meeting_scan_sec: int = 3600
-    meeting_scan_days: int = 7
-    meeting_scan_limit: int = 5
-
-    @property
-    def ledger_ready(self) -> bool:
-        """旧台账坐标（绑定表 + 变更记录表）配齐才算可用。
-
-        本地台账开着时这个属性不再是「能不能持久化」的判据——`service` 只看
-        `local_ledger`，避免两套存储各判一次、给出互相矛盾的启动摘要。
-        """
-        return bool(self.ledger_base_token and self.ledger_change_table)
-
-    @property
-    def cr_ready(self) -> bool:
-        """CR 台账是否可用（配齐 = 决策状态可跨重启）。"""
-        return bool(self.cr_base_token and self.cr_table)
-
-    @property
-    def kb_ready(self) -> bool:
-        """需求知识台账是否可用。"""
-        return bool(self.kb_base_token)
-
-    @property
-    def minutes_configured(self) -> bool:
-        """有可跑的会议素材来源：显式映射、自动扫描、或随群聊一起放开。"""
-        return bool(self.minutes_story_map or self.meeting_auto)
-
-
-@dataclass
 class McpServerConfig:
     """一个 stdio MCP server 的启动方式与超时。
 
@@ -530,15 +319,14 @@ class McpServerConfig:
 
 @dataclass
 class MCPConfig:
-    """MCP 工具面配置 — feishu / domains / capabilities / order_agent。
+    """MCP 工具面配置 — feishu / domains / capabilities。
 
     Attributes:
         feishu: 飞书收发、读文档、读会话最近消息（三红线在工具层硬拒）。
         domains: 业务域薄封装（日报 / Skill 目录 / 定时任务只读）。
-        capabilities: 把进程内 Handler 的工具面（数字先知、CMDB 提醒、工单、
-            PRD 监听…）投影成 MCP 工具——dsh 链路下**能力的执行入口**。
-            不投影时这些能力只有描述、没有手（会让模型如实说「没有执行入口」）。
-        order_agent: 独立工单 Agent 的 MCP 投影（代理转发其 stdio server）。
+        capabilities: 把进程内 Handler 的工具面投影成 MCP 工具——dsh 链路下
+            **能力的执行入口**。不投影时这些能力只有描述、没有手
+            （模型会如实说「没有这个执行入口」）。
         feishu_max_text_chars: 单条飞书文本长度上限（超长工具层拒绝，不截断）。
     """
 
@@ -548,13 +336,6 @@ class MCPConfig:
         default_factory=lambda: McpServerConfig(args=["-m", "app.mcp.domains_server"]))
     capabilities: McpServerConfig = field(
         default_factory=lambda: McpServerConfig(args=["-m", "app.mcp.capabilities_server"]))
-    order_agent: McpServerConfig = field(
-        default_factory=lambda: McpServerConfig(args=["-m", "app.mcp.order_agent_server"]))
-    # Figma 设计稿（PRD↔UI 对账）：官方 `figma-developer-mcp` 的 stdio 模式。
-    # 默认 disabled：它需要 node 入口绝对路径 + token，两者缺一个都会挂上一个
-    # 必然失败的子进程（表现为「模型说没有这个工具」，不报错）。
-    figma: McpServerConfig = field(
-        default_factory=lambda: McpServerConfig(args=["--stdio"], enabled=False))
     feishu_max_text_chars: int = 3000
 
 
@@ -592,71 +373,6 @@ class DshConfig:
 
 
 @dataclass
-class PmIdentity:
-    """PM 本人身份：open_id 与群里怎么称呼他。
-
-    `names` 是「这条消息冲我来的」判定依据（`pm_watch._my_names`）、也是
-    「别给自己起草催办」的过滤条件（`pm_nudge.ME`）。换人只改配置。
-    """
-
-    open_id: str = ""
-    names: list[str] = field(default_factory=list)
-
-
-@dataclass
-class PmOutputs:
-    """PM 的表在哪。空值 = 该表未接，调用方按缺省跳过而不是拼一个字面量。"""
-
-    spreadsheet_token: str = ""
-    sheet_id_versions: str = ""
-    sheet_id_weekly: str = ""
-    base_token: str = ""
-    table_id: str = ""
-
-
-@dataclass
-class PmPush:
-    """推送目标与时点。`group_id` 为空 = 只发私聊。"""
-
-    group_id: str = ""
-    morning: str = "09:00"
-    evening: str = "17:30"
-
-
-@dataclass
-class PmRelease:
-    """发版节拍。以 SOP 闸门的工作日为坐标：周一=1 … 周四=4。"""
-
-    release_weekday: int = 4
-    ask_days_before: list[int] = field(default_factory=lambda: [8])
-
-
-@dataclass
-class PmRules:
-    """调用方自用的规则，不传给能力层。"""
-
-    stale_days: int = 3
-    snooze_days: int = 3
-    scan_mode: str = "all"
-    release: PmRelease = field(default_factory=PmRelease)
-
-
-@dataclass
-class PmConfig:
-    """PM 工作台绑定（`[projects.pm]`）。
-
-    这一层只是**把身份与表位置从代码里搬出来**，不含业务判断——
-    「什么算冲我来」「卡片长什么样」仍在 `app/domains/pm/` 与调用方。
-    """
-
-    enabled: bool = False
-    identity: PmIdentity = field(default_factory=PmIdentity)
-    outputs: PmOutputs = field(default_factory=PmOutputs)
-    push: PmPush = field(default_factory=PmPush)
-    rules: PmRules = field(default_factory=PmRules)
-
-
-@dataclass
 class DailyReportConfig:
     """日报订阅推送（群里的定时推送），不是路由能力。
 
@@ -673,22 +389,17 @@ class DailyReportConfig:
 class AppConfig:
     feishu: FeishuConfig
     memory: MemoryConfig = field(default_factory=MemoryConfig)
-    webportal: WebPortalConfig = field(default_factory=WebPortalConfig)
     cc_connect: CCConnectConfig = field(default_factory=CCConnectConfig)
     router: RouterConfig = field(default_factory=RouterConfig)
     messaging: MessagingConfig = field(default_factory=MessagingConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     capability: CapabilityConfig = field(default_factory=CapabilityConfig)
     runtime_guard: RuntimeGuardConfig = field(default_factory=RuntimeGuardConfig)
-    case_mirror: CaseMirrorConfig = field(default_factory=CaseMirrorConfig)
     daily_report: DailyReportConfig = field(default_factory=DailyReportConfig)
     scheduled_tasks: ScheduledTasksConfig = field(default_factory=ScheduledTasksConfig)
     skill_catalog: SkillCatalogConfig = field(default_factory=SkillCatalogConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
     dsh: DshConfig = field(default_factory=DshConfig)
-    prd_watch: PrdWatchConfig = field(default_factory=PrdWatchConfig)
-    cmdb_watch: CmdbWatchConfig = field(default_factory=CmdbWatchConfig)
-    pm: PmConfig = field(default_factory=PmConfig)
     providers: list[ProviderConfig] = field(default_factory=list)
     work_dir: str = ""
 
@@ -726,7 +437,6 @@ def load_config(path: Path | None = None) -> AppConfig:
             app_secret=os.getenv("FEISHU_APP_SECRET") or pf["app_secret"],
         ),
         memory=_load_memory_config(project),
-        webportal=_load_webportal_config(project),
         cc_connect=_load_cc_connect_config(project),
         daily_report=_load_daily_report_config(project),
         router=_load_router_config(project),
@@ -734,14 +444,10 @@ def load_config(path: Path | None = None) -> AppConfig:
         dashboard=_load_dashboard_config(project),
         capability=_load_capability_config(project),
         runtime_guard=_load_runtime_guard_config(project),
-        case_mirror=_load_case_mirror_config(project),
         scheduled_tasks=_load_scheduled_tasks_config(project),
         skill_catalog=_load_skill_catalog_config(project),
         mcp=_load_mcp_config(project),
         dsh=_load_dsh_config(project),
-        prd_watch=_load_prd_watch_config(project),
-        cmdb_watch=_load_cmdb_watch_config(project),
-        pm=_load_pm_config(project),
         providers=providers,
         work_dir=project.get("agent", {}).get("options", {}).get("work_dir", ""),
         # agents_yaml removed — agents loaded from bot/agents/ dir
@@ -754,28 +460,18 @@ def _log_summary(cfg: AppConfig) -> None:
     """打印配置摘要（排障用）— 只打非敏感字段与凭据「有无」，不打值。"""
     logger.info(
         "[config] loaded: feishu(app_id=%s, secret=%s) router(model=%s, enabled=%s) "
-        "cc_connect(enabled=%s, webhook=%s) memory(enabled=%s) webportal(enabled=%s) "
+        "cc_connect(enabled=%s, webhook=%s) memory(enabled=%s) "
         "messaging(debounce=%.1fs, max_wait=%.1fs) dashboard(port=%s) "
         "runtime_guard(enabled=%s, max_concurrent=%s, max_queue=%s)",
         cfg.feishu.app_id[:8] + "…" if cfg.feishu.app_id else "MISSING",
         "set" if cfg.feishu.app_secret else "MISSING",
         cfg.router.model, cfg.router.enabled,
         cfg.cc_connect.enabled, cfg.cc_connect.webhook_url,
-        cfg.memory.enabled, cfg.webportal.enabled,
+        cfg.memory.enabled,
         cfg.messaging.debounce_sec, cfg.messaging.max_wait_sec,
         cfg.dashboard.port,
         cfg.runtime_guard.enabled, cfg.runtime_guard.max_concurrent,
         cfg.runtime_guard.max_queue,
-    )
-    # PM 绑定单独一行：这一段最容易「写了不生效」（顶层段 vs projects 子段），
-    # 启动时把是否读到值打出来，比事后 grep 配置快得多。
-    logger.info(
-        "[config] pm: enabled=%s identity=%s names=%s outputs=%s push_group=%s",
-        cfg.pm.enabled,
-        "set" if cfg.pm.identity.open_id else "MISSING",
-        cfg.pm.identity.names,
-        "set" if cfg.pm.outputs.spreadsheet_token else "MISSING",
-        "set" if cfg.pm.push.group_id else "MISSING",
     )
 
 
@@ -799,16 +495,6 @@ def _load_memory_config(project: dict) -> MemoryConfig:
             )),
             manage_process=bool(lc.get("manage_process", True)),
         ),
-    )
-
-
-def _load_webportal_config(project: dict) -> WebPortalConfig:
-    """从 project 配置读取 WebPortal 工单服务配置，缺省项回落默认值。"""
-    wc = project.get("webportal", {})
-    return WebPortalConfig(
-        enabled=wc.get("enabled", True),
-        base_url=wc.get("base_url", "http://127.0.0.1:8000"),
-        timeout_sec=wc.get("timeout_sec", 15),
     )
 
 
@@ -873,91 +559,6 @@ def _load_runtime_guard_config(project: dict) -> RuntimeGuardConfig:
         persist_enabled=bool(rg.get("persist_enabled", True)),
         persist_dir=str(rg.get("persist_dir", "logs/runtime_tasks")),
         notify_interrupted=bool(rg.get("notify_interrupted", True)),
-    )
-
-
-def _load_case_mirror_config(project: dict) -> CaseMirrorConfig:
-    """从 project 配置读取案例库飞书镜像的写目标（三个 token）。"""
-    cm = project.get("case_mirror", {})
-    default = CaseMirrorConfig()
-    return CaseMirrorConfig(
-        enabled=bool(cm.get("enabled", True)),
-        space_id=str(cm.get("space_id", "")).strip(),
-        parent_node_token=str(cm.get("parent_node_token", "")).strip(),
-        index_doc_token=str(cm.get("index_doc_token", "")).strip(),
-        wiki_base_url=str(cm.get("wiki_base_url", "")).strip() or default.wiki_base_url,
-    )
-
-
-def _load_cmdb_watch_config(project: dict) -> CmdbWatchConfig:
-    """从 project 配置读取 CMDB 工单提醒配置，缺省项回落默认值。
-
-    订阅名单不在配置里——每人的 CMDB 用户名由本人在对话里声明并落 state.json，
-    配置只留「服务怎么跑」的参数。轮询间隔做下限校验：低于 60s 会把内网 CMDB
-    变成自己的压测对象，配置写错时拉回并告警。
-    """
-    cw = project.get("cmdb_watch", {})
-    interval = int(cw.get("interval_sec", 120))
-    if interval < 60:
-        logger.warning("[cmdb_watch] interval_sec=%s < 60（下限），强制拉回 60", interval)
-        interval = 60
-    return CmdbWatchConfig(
-        enabled=bool(cw.get("enabled", False)),
-        base_url=str(cw.get("base_url") or "http://cmdb.example.com").rstrip("/"),
-        state_path=str(cw.get("state_path") or "logs/cmdb_watch/state.json"),
-        interval_sec=interval,
-        scan_limit=max(1, int(cw.get("scan_limit", 30))),
-        probe_span=max(0, int(cw.get("probe_span", 30))),
-        probe_step=max(1, int(cw.get("probe_step", 3))),
-        session_id=str(cw.get("session_id") or ""),
-        initial_scan=max(0, int(cw.get("initial_scan", 10))),
-        refresh_sec=max(60, int(cw.get("refresh_sec", 900))),
-        refresh_session_on_start=bool(cw.get("refresh_session_on_start", True)),
-        watch_error_limit=max(1, int(cw.get("watch_error_limit", 5))),
-    )
-
-
-def _load_pm_config(project: dict) -> PmConfig:
-    """从 `[projects.pm]` 读 PM 工作台绑定。
-
-    这一段**必须挂在 `[[projects]]` 下面**（与 `[projects.dashboard]` 同级）。
-    写成顶层段 `[pm]` 的话 `project.get("pm")` 取不到，只会静默拿到默认值——
-    配置写在那儿很好看，运行时永远不生效，不报错也不打日志。
-    """
-    pm = project.get("pm", {}) or {}
-    ident = pm.get("identity", {}) or {}
-    out = pm.get("outputs", {}) or {}
-    push = pm.get("push", {}) or {}
-    rules = pm.get("rules", {}) or {}
-    rel = rules.get("release", {}) or {}
-    names = [str(n).strip() for n in (ident.get("names") or []) if str(n).strip()]
-    return PmConfig(
-        enabled=bool(pm.get("enabled", False)),
-        identity=PmIdentity(
-            open_id=str(ident.get("open_id", "")).strip(),
-            names=names,
-        ),
-        outputs=PmOutputs(
-            spreadsheet_token=str(out.get("spreadsheet_token", "")).strip(),
-            sheet_id_versions=str(out.get("sheet_id_versions", "")).strip(),
-            sheet_id_weekly=str(out.get("sheet_id_weekly", "")).strip(),
-            base_token=str(out.get("base_token", "")).strip(),
-            table_id=str(out.get("table_id", "")).strip(),
-        ),
-        push=PmPush(
-            group_id=str(push.get("group_id", "")).strip(),
-            morning=str(push.get("morning", "09:00")),
-            evening=str(push.get("evening", "17:30")),
-        ),
-        rules=PmRules(
-            stale_days=int(rules.get("stale_days", 3)),
-            snooze_days=int(rules.get("snooze_days", 3)),
-            scan_mode=str(rules.get("scan_mode", "all")),
-            release=PmRelease(
-                release_weekday=int(rel.get("release_weekday", 4)),
-                ask_days_before=[int(d) for d in (rel.get("ask_days_before") or [8])],
-            ),
-        ),
     )
 
 
@@ -1036,7 +637,7 @@ def _load_mcp_config(project: dict) -> MCPConfig:
     """从 [projects.mcp] 读取各 stdio server 的启动方式与飞书文本上限。"""
     mc = project.get("mcp", {})
     default = MCPConfig()
-    names = ("feishu", "domains", "capabilities", "order_agent", "figma")
+    names = ("feishu", "domains", "capabilities")
     servers = {name: mc.get(name, {}) for name in names}
     for name, raw in servers.items():
         if not isinstance(raw, dict):
@@ -1045,71 +646,7 @@ def _load_mcp_config(project: dict) -> MCPConfig:
         feishu=_load_mcp_server(servers["feishu"], default.feishu),
         domains=_load_mcp_server(servers["domains"], default.domains),
         capabilities=_load_mcp_server(servers["capabilities"], default.capabilities),
-        order_agent=_load_mcp_server(servers["order_agent"], default.order_agent),
-        figma=_load_mcp_server(servers["figma"], default.figma),
         feishu_max_text_chars=int(mc.get("feishu_max_text_chars", 3000)),
-    )
-
-
-def _load_prd_watch_config(project: dict) -> PrdWatchConfig:
-    """从 project 配置读取 easyprd 监听配置，缺省项回落默认值。
-
-    置信度分带做入口校验：min > flag 时两者互换并告警——阈值写反会让「正式变更」
-    全部带上 ⚠️（或反之），比配错数字更难发现。
-    """
-    pw = project.get("prd_watch", {})
-    lo = float(pw.get("extract_min_confidence", 0.7))
-    hi = float(pw.get("extract_flag_confidence", 0.85))
-    if lo > hi:
-        logger.warning(
-            "[prd_watch] extract_min_confidence(%.2f) > extract_flag_confidence(%.2f)，已互换",
-            lo, hi,
-        )
-        lo, hi = hi, lo
-    return PrdWatchConfig(
-        enabled=bool(pw.get("enabled", False)),
-        # 空串与 None 都不算群 ID：写歪的注释项不能被当成「监听所有群」的空匹配
-        watch_chats=[c for c in (str(x).strip() for x in (pw.get("watch_chats") or []))
-                     if c and c.lower() != "none"],
-        window_sec=float(pw.get("window_sec", 300.0)),
-        extract_min_confidence=lo,
-        extract_flag_confidence=hi,
-        poll_replies_sec=int(pw.get("poll_replies_sec", 120)),
-        decision_ttl_days=int(pw.get("decision_ttl_days", 3)),
-        dry_run=bool(pw.get("dry_run", True)),
-        ledger_base_token=str(pw.get("ledger_base_token", "") or ""),
-        ledger_change_table=str(pw.get("ledger_change_table", "") or ""),
-        ledger_bind_table=str(pw.get("ledger_bind_table", "") or ""),
-        meegle_simple_name=str(pw.get("meegle_simple_name") or "").strip(),
-        story_chat_map={str(k): str(v).strip()
-                        for k, v in (pw.get("story_chat_map") or {}).items()
-                        if str(v).strip()},
-        prd_field=str(pw.get("prd_field") or "field_c56ee5").strip(),
-        task_doc_field=str(pw.get("task_doc_field") or "wiki").strip(),
-        comment_identity=(str(pw.get("comment_identity") or "bot").strip().lower()
-                          if str(pw.get("comment_identity") or "bot").strip().lower()
-                          in ("bot", "user") else "bot"),
-        minutes_identity=(str(pw.get("minutes_identity") or "user").strip().lower()
-                          if str(pw.get("minutes_identity") or "user").strip().lower()
-                          in ("user", "bot") else "user"),
-        minutes_poll_sec=int(pw.get("minutes_poll_sec", 1800)),
-        minutes_story_map={str(k): str(v)
-                           for k, v in (pw.get("minutes_story_map") or {}).items()},
-        minutes_base_url=str(pw.get("minutes_base_url") or "").strip().rstrip("/"),
-        notes_base_url=str(pw.get("notes_base_url") or "").strip().rstrip("/"),
-        cr_base_token=str(pw.get("cr_base_token") or "").strip(),
-        cr_table=str(pw.get("cr_table") or "").strip(),
-        kb_base_token=str(pw.get("kb_base_token") or "").strip(),
-        kb_story_table=str(pw.get("kb_story_table") or "").strip(),
-        kb_meeting_table=str(pw.get("kb_meeting_table") or "").strip(),
-        kb_change_table=str(pw.get("kb_change_table") or "").strip(),
-        local_ledger=bool(pw.get("local_ledger", True)),
-        local_ledger_path=str(pw.get("local_ledger_path") or "").strip(),
-        figma_token=str(pw.get("figma_token") or "").strip(),
-        meeting_auto=bool(pw.get("meeting_auto", False)),
-        meeting_scan_sec=int(pw.get("meeting_scan_sec", 3600)),
-        meeting_scan_days=int(pw.get("meeting_scan_days", 7)),
-        meeting_scan_limit=int(pw.get("meeting_scan_limit", 5)),
     )
 
 

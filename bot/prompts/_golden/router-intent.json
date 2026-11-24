@@ -4,42 +4,6 @@
   "description": "意图识别行为级回归 — 真实调用 RouterLLM，验证消息 → 实际路由工具（与 router-system.json 静态编码检查互补）；v2 扩充实际功能/否定/英文/多意图用例；v2.4 钉能力盘点→help 与技能治理→skill-catalog 分流；v2.5 动静结合——团队资产盘点（我们/团队+Skill/Agent 字样）→ skill-catalog（本地快照毫秒级），第二人称自我介绍仍归 help；v2.7 移除 feishu-doc-agent 正向用例（知识库查询移交飞书豆包），保留 approval-negative 文档链路负向守卫；v2.8 +3 例 easyprd 手动入口（状态/催识别/能力问询）→ prd-watch-agent；v2.9 +4 例 CMDB 工单提醒订阅（订阅/盯发布单/查订阅/退订）→ cmdb-watch-agent；v3.0 +4 例 指定工单关注（关注单号/贴链接/查关注/取消关注）→ cmdb-watch-agent",
   "cases": [
     {
-      "input": "查一下 t_rwa_product 表结构",
-      "expected_tool": "direct_answer",
-      "tags": [],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "SELECT * FROM flf_wealth_backend.users WHERE id = 1",
-      "expected_tool": "direct_answer",
-      "tags": [],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "看看 rwa-agent 最近发布了什么版本",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "offline-capability"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
-      "input": "nacos 上 flp-saas-wealth 的 DataId 配置内容是什么",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "offline-capability"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
       "input": "今天有什么技术动态和 AI 新闻",
       "expected_tool": "route_to_aihot",
       "tags": [
@@ -50,13 +14,6 @@
         "route_to_direct_answer"
       ],
       "note": "日报能力已下线，资讯类需求统一由 aihot 承接（同一数据源 aihot.virxact.com）"
-    },
-    {
-      "input": "帮我创建一个数据库变更工单",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal"
-      ]
     },
     {
       "input": "你好呀",
@@ -81,27 +38,12 @@
       ]
     },
     {
-      "input": "rwa 的确权流程是怎样的",
-      "expected_tool": "direct_answer",
+      "input": "现在 aihot 的版本是？",
+      "expected_tool": "route_to_help",
       "tags": [
-        "rwa"
+        "help"
       ],
-      "note": "dev-bot 已 routable=false（2026-09-14）：业务知识问答由自答引擎承接",
-      "acceptable_tools": [
-        "direct_answer"
-      ]
-    },
-    {
-      "input": "帮我看看 hub-platform-platform 里订单模块的代码",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "rwa",
-        "code"
-      ],
-      "note": "dev-bot 已 routable=false：代码分析不再路由，自答引擎回答（/dev 是维护者直达通道）",
-      "acceptable_tools": [
-        "direct_answer"
-      ]
+      "note": "问某能力版本号 → help 复述清单"
     },
     {
       "input": "帮我查一下那个东西",
@@ -136,50 +78,6 @@
       ]
     },
     {
-      "input": "帮我修改用户表把他的手机号改一下",
-      "expected_tool": "route_to_clarify",
-      "tags": [
-        "webportal",
-        "multi-turn",
-        "revised-20260912"
-      ],
-      "note": "边界用例：改数据缺关键信息应反问，但意图域明确(工单)也可受理；两者均合理",
-      "acceptable_tools": [
-        "route_to_clarify",
-        "route_to_webportal_agent"
-      ]
-    },
-    {
-      "input": "把刚才 t_rwa_product 那个查询结果再给我看一遍",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "multi-turn"
-      ],
-      "history": [
-        {
-          "role": "user",
-          "content": "查一下 t_rwa_product 表结构"
-        },
-        {
-          "role": "assistant",
-          "content": "t_rwa_product 表包含 id、product_name、nav 等字段……（查询结果略）"
-        }
-      ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "最新的版本部署到哪个环境了",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "offline-capability"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
       "input": "风格迁移模型哪家强？",
       "expected_tool": "direct_answer",
       "tags": [
@@ -188,78 +86,6 @@
         "revised-20260912"
       ],
       "note": "AI 咨询域原归 dev-bot；routable=false 后由自答引擎承接"
-    },
-    {
-      "input": "flf_wealth_product 库里有哪些表",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "show create table t_user_account",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "统计一下昨天新增的用户数量",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "rwa-agent 这次上线到 prod 了吗",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
-      "input": "帮我回滚上一个版本",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
-      "input": "查一下 hub-platform namespace 的数据库连接配置",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
-      "input": "把 flp-saas-wealth 的超时时间改成 30 秒",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "v2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
     },
     {
       "input": "给我看看昨天抓取的技术日报",
@@ -288,90 +114,6 @@
       "note": "日报能力已下线，资讯类需求统一由 aihot 承接（同一数据源 aihot.virxact.com）"
     },
     {
-      "input": "工单 DATA2026090101 现在处理到哪一步了",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "v2"
-      ]
-    },
-    {
-      "input": "帮我把这个变更申请转成 SQL：给 t_user 表加一个 status 列",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "v2"
-      ]
-    },
-    {
-      "input": "https://go.feishu.cn/doc/xxxx 这个文档讲的是什么",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "approval-negative",
-        "v2"
-      ],
-      "acceptable_tools": [
-        "direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "文档链接不得进审批/工单管线（approval-negative 守卫，防路由回退）；飞书文档问答已移除，自答/反问可接受"
-    },
-    {
-      "input": "帮我建一个会议纪要文档",
-      "expected_tool": "route_to_clarify",
-      "tags": [
-        "rwa",
-        "v2"
-      ],
-      "note": "飞书文档操作无对应 Agent（feishu-doc-agent 已移除）；反问/自答可接受（真实评测 2026-09-14: direct_answer conf=0.0）",
-      "acceptable_tools": [
-        "route_to_clarify",
-        "direct_answer"
-      ]
-    },
-    {
-      "input": "LUPU 租户上月的产品净值报告在哪",
-      "expected_tool": "route_to_clarify",
-      "tags": [
-        "rwa",
-        "v2"
-      ],
-      "note": "报告查找已无知识库检索（feishu-doc-agent 已移除）；反问/自答可接受，勿改道工单/日报",
-      "acceptable_tools": [
-        "route_to_clarify",
-        "direct_answer"
-      ]
-    },
-    {
-      "input": "/findcode order service",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "rwa",
-        "code",
-        "v2"
-      ],
-      "note": "/findcode 原归 dev-bot；routable=false 后自答引擎说明能力边界并引导",
-      "acceptable_tools": [
-        "direct_answer",
-        "route_to_clarify"
-      ]
-    },
-    {
-      "input": "2026 年 AI Agent 领域有哪些值得关注的创业公司",
-      "expected_tool": "route_to_aihot",
-      "tags": [
-        "rwa",
-        "ai-consult",
-        "v2",
-        "revised-20260912"
-      ],
-      "note": "AI 行业盘点：能取实时资讯走 aihot，纯知识盘点自答也合理",
-      "acceptable_tools": [
-        "route_to_aihot",
-        "route_to_direct_answer"
-      ]
-    },
-    {
       "input": "/help",
       "expected_tool": "route_to_help",
       "tags": [
@@ -386,16 +128,6 @@
         "help",
         "v2"
       ]
-    },
-    {
-      "input": "现在 news-sql-generator 的版本是？",
-      "expected_tool": "route_to_help",
-      "tags": [
-        "help",
-        "version",
-        "v2"
-      ],
-      "note": "能力版本查询归 help（能力清单携带版本号），不落 direct_answer 猜「没有版本信息」"
     },
     {
       "input": "更新一下",
@@ -416,48 +148,12 @@
       ]
     },
     {
-      "input": "show me the table schema of t_rwa_product",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "english",
-        "v2"
-      ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据"
-    },
-    {
-      "input": "what's the latest deploy status?",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "english",
-        "v2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "发布管理 / Nacos 配置能力已整体下线（产品决定：bot 不做发布与配置管理）→ 自答说明能力边界并给替代路径（CMDB 平台自行查看 / Nacos 控制台）；不得编造发布或配置数据"
-    },
-    {
       "input": "hello there!",
       "expected_tool": "direct_answer",
       "tags": [
         "english",
         "direct",
         "v2"
-      ]
-    },
-    {
-      "input": "查一下发布状态，顺便看看今天的日报",
-      "expected_tool": "aihot",
-      "tags": [
-        "multi-intent",
-        "v2"
-      ],
-      "note": "混合意图：发布那半已下线，可交付的只有日报/AI 资讯 → 落 aihot 或 direct-answer；旧 daily-agent 标签也算（同一数据源）",
-      "acceptable_tools": [
-        "route_to_aihot",
-        "route_to_daily_agent",
-        "route_to_direct_answer"
       ]
     },
     {
@@ -505,32 +201,6 @@
         "v2.1"
       ],
       "note": "具体能力的机制问题归 schedule-agent"
-    },
-    {
-      "input": "检查一下 Release 分支都合回 main 了吗",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "merge-check",
-        "v2.2"
-      ],
-      "note": "分支合并检查能力已下线 → 自答说明边界并指向 GitLab/MR 页面；不得编造分支状态",
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ]
-    },
-    {
-      "input": "分支合并检查",
-      "expected_tool": "direct_answer",
-      "tags": [
-        "merge-check",
-        "v2.2"
-      ],
-      "acceptable_tools": [
-        "route_to_direct_answer",
-        "route_to_clarify"
-      ],
-      "note": "分支合并检查能力已下线 → 自答说明边界并指向 GitLab/MR 页面；不得编造分支状态"
     },
     {
       "input": "你应该不能处理开户权限流程才对",
@@ -661,186 +331,13 @@
       ]
     },
     {
-      "input": "查库那个",
-      "expected_tool": "direct_answer",
+      "input": "查一下今天的日报，顺便建个每天 9 点的定时任务",
+      "expected_tool": "route_to_schedule_agent",
+      "require_extra_call": "route_to_aihot",
       "tags": [
-        "clarify",
-        "pending-confirm",
-        "v2.4"
+        "multi-intent"
       ],
-      "note": "数据库查询能力已下线（产品决定：不通过飞书查 MySQL）→ 自答说明能力边界并给替代路径；不得编造库表数据",
-      "history": [
-        {
-          "role": "user",
-          "content": "帮我把用户表的手机号改一下"
-        },
-        {
-          "role": "assistant",
-          "content": "🤔 想跟你确认一下：你是要直接查用户表数据，还是提交工单变更申请？"
-        }
-      ]
-    },
-    {
-      "input": "帮我看看这个审批 https://go.feishu.cn/approval/s/AbCdEf123XyZ",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "approval"
-      ]
-    },
-    {
-      "input": "沉淀案例 5107",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "case-ingest"
-      ]
-    },
-    {
-      "input": "把这个飞书文档沉淀成案例 https://example.feishu.cn/wiki/abc123",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "case-ingest",
-        "feishu-source"
-      ]
-    },
-    {
-      "input": "案例同步 change-trader-email-webportal",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "case-ingest"
-      ]
-    },
-    {
-      "input": "把这笔工单的处理过程录入案例库",
-      "expected_tool": "route_to_webportal_agent",
-      "tags": [
-        "webportal",
-        "case-ingest"
-      ]
-    },
-    {
-      "input": "PRD 变更监听现在在跑吗，盯了哪些群",
-      "expected_tool": "route_to_prd_watch_agent",
-      "tags": [
-        "prd-watch",
-        "status"
-      ],
-      "acceptable_tools": [
-        "route_to_prd_watch_agent",
-        "route_to_cmdb_watch_agent"
-      ]
-    },
-    {
-      "input": "把刚才群里讨论的需求变更整理成 PRD 评论建议",
-      "expected_tool": "route_to_prd_watch_agent",
-      "tags": [
-        "prd-watch",
-        "flush"
-      ],
-      "acceptable_tools": [
-        "route_to_prd_watch_agent",
-        "route_to_cmdb_watch_agent"
-      ]
-    },
-    {
-      "input": "easyprd 是什么，能用吗",
-      "expected_tool": "route_to_prd_watch_agent",
-      "tags": [
-        "prd-watch",
-        "capability"
-      ],
-      "acceptable_tools": [
-        "route_to_prd_watch_agent",
-        "route_to_direct_answer",
-        "route_to_help"
-      ]
-    },
-    {
-      "input": "订阅 CMDB 工单提醒，我的用户名是 devuser",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "subscribe"
-      ],
-      "acceptable_tools": [
-        "route_to_cmdb_watch_agent",
-        "route_to_prd_watch_agent"
-      ]
-    },
-    {
-      "input": "以后有我发布工单就提醒我一下",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "subscribe"
-      ]
-    },
-    {
-      "input": "CMDB 工单提醒我订阅的是哪个用户名",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "status"
-      ],
-      "acceptable_tools": [
-        "route_to_cmdb_watch_agent",
-        "route_to_prd_watch_agent"
-      ]
-    },
-    {
-      "input": "别再提醒我那边工单了，取消订阅",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "unsubscribe"
-      ]
-    },
-    {
-      "input": "关注 CMDB 工单 5778 的执行情况，开始和完成告诉我",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "watch-order"
-      ],
-      "acceptable_tools": [
-        "route_to_cmdb_watch_agent",
-        "route_to_prd_watch_agent"
-      ]
-    },
-    {
-      "input": "盯一下这张单 http://cmdb.example.com/order/OrderDetail?order_id=5778",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "watch-order"
-      ],
-      "acceptable_tools": [
-        "route_to_cmdb_watch_agent",
-        "route_to_prd_watch_agent"
-      ]
-    },
-    {
-      "input": "我关注了哪些 CMDB 工单，进度怎么样",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "list-watch"
-      ],
-      "acceptable_tools": [
-        "route_to_cmdb_watch_agent",
-        "route_to_prd_watch_agent"
-      ]
-    },
-    {
-      "input": "别盯 5778 了，取消工单关注",
-      "expected_tool": "route_to_cmdb_watch_agent",
-      "tags": [
-        "cmdb-watch",
-        "unwatch"
-      ]
+      "note": "复合请求：主调用定时任务 + 追加资讯能力"
     }
   ]
 }

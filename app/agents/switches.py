@@ -2,7 +2,7 @@
 
 落盘 bot/todos/agent_switches.json：
 
-    {"skill-aihot": false, "webportal-agent": true}
+    {"skill-aihot": false, "schedule-agent": true}
 
 语义：值为 false 的 Agent 被「强制下线」——路由工具表、/help 清单、
 复杂任务分解列表全部不可见（registry.routable() 联合判定），但

@@ -1,7 +1,7 @@
 """Agent Health Monitor — periodic health checks and self-healing.
 
 Monitors agent health via a pluggable probe registry:
-- 按 agent 名匹配专属探测（如 daily-agent 数据源巡检、webportal HTTP 探测）
+- 按 agent 名匹配专属探测（如 daily-agent 数据源巡检）
 - 未注册专属探测的 Agent 按其 transport 匹配通用探测
   （如 cc_connect 通道 → webhook ping）
 - 都没有 → unknown
@@ -54,7 +54,6 @@ def register_probe(key: str, fn: ProbeFn) -> None:
 def _default_probes() -> dict[str, ProbeFn]:
     """默认探测表 — 覆盖现有全部探测策略。"""
     return {
-        "name:webportal-agent": _probe_webportal_a2a,
         # cc_connect 通道通用探测：dev-bot / db / deploy / config 共用
         "transport:cc_connect": _probe_cc_connect,
         # handler 通道通用探测：schedule-agent 等进程内 Handler
@@ -97,37 +96,6 @@ async def _probe_daily_agent(monitor, agent: AgentDef) -> dict:
         detail = f"AI HOT 不可达：{str(e)[:60]}；本地缓存 {cached_days} 期"
         status = "green" if cached_days else "red"
         return {"status": status, "duration_ms": round(elapsed, 1), "detail": detail}
-
-
-async def _probe_webportal_a2a(monitor, agent: AgentDef) -> dict:
-    """webportal-agent 探测：A2A Agent Card 可发现性（webportal-order-agent 服务）。
-
-    卡片在 = 服务进程活着；卡片 version 即上游引擎版本（独立发版，探活顺带
-    把版本带进健康面板）。旧实现读本地 skill 包加载案例库，已随 v3.0.0
-    去 vendor（bot/skills/order-sql 删除）退役。
-    """
-    import httpx
-
-    from app.agents.handlers.webportal_handler import _A2A_BASE
-
-    start = time.time()
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            resp = await client.get(f"{_A2A_BASE}/.well-known/agent-card.json")
-        elapsed = (time.time() - start) * 1000
-        if resp.status_code != 200:
-            return {"status": "red", "duration_ms": round(elapsed, 1),
-                    "detail": f"A2A card HTTP {resp.status_code}（服务异常）"}
-        card = resp.json()
-        skills = len(card.get("skills") or [])
-        return {"status": "green", "duration_ms": round(elapsed, 1),
-                "detail": f"A2A 服务就绪：{card.get('name', '?')} "
-                          f"v{card.get('version', '?')}（{skills} 技能）"}
-    except Exception as e:
-        elapsed = (time.time() - start) * 1000
-        return {"status": "red", "duration_ms": round(elapsed, 1),
-                "detail": f"A2A 服务不可达（python -m order_agent.a2a_server）: "
-                          f"{str(e)[:50]}"}
 
 
 async def _probe_cc_connect(monitor, agent: AgentDef) -> dict:
@@ -216,7 +184,7 @@ class AgentHealthMonitor:
     """Periodic health monitor for all agents.
 
     健康检查策略（查探测注册表）：
-    - agent 名有专属探测 → 用之（daily/webportal）
+    - agent 名有专属探测 → 用之（如 daily-agent）
     - 否则按 transport 匹配通用探测（cc_connect 通道 webhook ping）
     - 都没有 → unknown
     """
@@ -227,14 +195,12 @@ class AgentHealthMonitor:
         cc_client: CCConnectClient | None,
         check_interval_sec: int = 300,
         max_consecutive_failures: int = 3,
-        webportal_base_url: str = "http://127.0.0.1:8000",
         handler_registry: Any = None,
     ):
         self._registry = registry
         self._cc_client = cc_client
         self._check_interval = check_interval_sec
         self._max_failures = max_consecutive_failures
-        self._webportal_base_url = webportal_base_url
         self._handler_registry = handler_registry
         self._statuses: dict[str, HealthStatus] = {}
         self._running = False
@@ -391,14 +357,12 @@ class AgentHealthMonitor:
 async def quick_health_check(
     registry: AgentRegistry,
     cc_client: CCConnectClient | None,
-    webportal_base_url: str = "http://127.0.0.1:8000",
     handler_registry: Any = None,
 ) -> dict[str, Any]:
     """Run a one-shot health check and return summary."""
     monitor = AgentHealthMonitor(
         registry, cc_client,
         check_interval_sec=999999,
-        webportal_base_url=webportal_base_url,
         handler_registry=handler_registry,
     )
     await monitor.check_all()

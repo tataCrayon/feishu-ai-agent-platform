@@ -134,7 +134,7 @@ async def _run(
         tail = (stderr or stdout).decode("utf-8", errors="replace").strip()
         # lark-cli 的业务错误（缺 scope / 无权限 / 未登录）也走非零退出码，
         # 且 payload 里带 missing_scopes —— 不解析就会把「缺哪个 scope」这种
-        # 可行动信息埋在长 JSON 里，用户/上层拿不到（easyprd 写评论实测踩过）。
+        # 可行动信息埋在长 JSON 里，用户/上层拿不到（写文档评论实测踩过）。
         parsed = _error_from_output(tail)
         if parsed is not None:
             message, missing = parsed
@@ -272,14 +272,14 @@ class LarkCli:
             "--format", "json",
         ], stdin_text=markdown)
 
-    # ── PRD 变更监听（easyprd）专用：块定位 + 评论读写 ─────────────
+    # ── 文档评论链路：块定位 + 评论读写 ─────────────────────────
     # 与上面写操作同规矩：目标文档 token 由调用方从台账/配置取，不接受消息内容里
     # 的链接决定写到哪里。identity 可切（见方法注释），默认 user。
 
     async def inspect_url(self, url: str, *, identity: str = "user") -> dict[str, str]:
         """解析飞书文档链接 → 可操作坐标。
 
-        Story 上挂的是 wiki 链接（`/wiki/{node_token}`），而读正文与写评论要的是
+        业务系统里存的是 wiki 链接（`/wiki/{node_token}`），而读正文与写评论要的是
         **docx obj_token**——两者不是一个东西，直接拿 node_token 去 fetch 会报
         `invalid token length`（实测）。返回 {"token","type","title","obj_token"}。
         """

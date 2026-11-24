@@ -37,10 +37,10 @@ GOLDEN = PROJECT_DIR / "bot" / "prompts" / "_golden" / "router-intent.json"
 DEFAULT_PATCH = PROJECT_DIR / "deploy" / "dsh" / "agentbiz" / "cordis.patch.yml"
 
 # 技能目录里能承载路由的业务能力（与 skills.allowlist 一致）。
-# golden 的 expected_tool 用的是 agent 名（`route_to_webportal_agent`），
-# 而技能名是 `webportal-agent`——比对前统一成 kebab-case 并剥掉 route_to_ 前缀。
+# golden 的 expected_tool 用的是工具名（`route_to_digital_oracle_agent`），
+# 而技能名是 `digital-oracle-agent`——比对前统一成 kebab-case 并剥掉 route_to_ 前缀。
 def normalize(name: str) -> str:
-    """`route_to_webportal_agent` / `webportal-agent` 统一成 `webportal-agent`。"""
+    """`route_to_digital_oracle_agent` / `digital-oracle-agent` 统一成 `digital-oracle-agent`。"""
     n = name.strip().lower()
     for prefix in ("route_to_", "route-to-"):
         if n.startswith(prefix):
@@ -50,8 +50,7 @@ def normalize(name: str) -> str:
 
 _KNOWN_LABELS = frozenset({
     "direct-answer", "clarify", "help",
-    "webportal-agent", "schedule-agent", "digital-oracle-agent", "aihot",
-    "skill-catalog-agent", "prd-watch-agent", "cmdb-watch-agent",
+    "schedule-agent", "digital-oracle-agent", "aihot", "skill-catalog-agent",
 })
 
 
@@ -71,7 +70,7 @@ def _pick_label(raw: str) -> str:
             if candidate in known:
                 return candidate
             # 标签与正文之间没空格时会被扫成一个词（`aihotaihot`、
-            # `webportal-agent` 紧贴正文）：按前缀命中，取最长的那个复用名。
+            # `schedule-agent` 紧贴正文）：按前缀命中，取最长的那个复用名。
             prefix_hits = [k for k in known if candidate.startswith(k)]
             if prefix_hits:
                 return max(prefix_hits, key=len)
@@ -84,9 +83,6 @@ def _pick_label(raw: str) -> str:
 # shell 工具是通用手段，不代表分派到某个业务能力。
 _TOOL_LABEL = {
     "gather_signals": "digital-oracle-agent",
-    "process_order": "webportal-agent",
-    "fetch_approval": "webportal-agent",
-    "list_cases": "webportal-agent",
     "find_similar_skills": "skill-catalog-agent",
     "get_skill_status": "skill-catalog-agent",
     "get_skill_status_board": "skill-catalog-agent",
@@ -103,13 +99,6 @@ _TOOL_LABEL = {
     "list_schedules": "schedule-agent",
     "daily_report": "aihot",
     "daily_report_card": "aihot",
-    "subscribe_cmdb_watch": "cmdb-watch-agent",
-    "unsubscribe_cmdb_watch": "cmdb-watch-agent",
-    "list_cmdb_watches": "cmdb-watch-agent",
-    "cmdb_watch_status": "cmdb-watch-agent",
-    "watch_cmdb_order": "cmdb-watch-agent",
-    "unwatch_cmdb_order": "cmdb-watch-agent",
-    "prd_watch_status": "prd-watch-agent",
 }
 
 # `skill` 工具载入某项技能 = 分派到该技能（入参里带 name）。
@@ -182,9 +171,9 @@ async def run(
 ) -> list[dict]:
     # 挂上数据源工具：路由判对不等于答对。回归环境要和线上一致，否则
     # 「已转交 db-agent，请稍候」这种空转答复也会被判成通过。
-    # cwd 用仓库根：部署目录里没有 .dsh/ 也没有 .git，MCP 子进程（cmdb 走
-    # node、mysql 走 npx）在那种 cwd 下初始化会失败，表现为 session/new
-    # 直接 Internal error——看着像 dsh 的问题，其实是工作目录的问题。
+    # cwd 用仓库根：部署目录里没有 .dsh/ 也没有 .git，MCP 子进程在那种 cwd 下
+    # 初始化会失败，表现为 session/new 直接 Internal error——看着像 dsh 的问题，
+    # 其实是工作目录的问题。
     session_id = await adapter.session_new(str(PROJECT_DIR), mcp_servers)
     results = []
     # golden 里带 history 的用例（多轮追问、承接反问）只有在上下文里跑才有意义：

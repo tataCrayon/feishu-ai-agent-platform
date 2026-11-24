@@ -14,7 +14,7 @@ app/mcp/           新增：MCP server 实现（feishu / memory / domain engines
 app/agents/        能力元数据（agent.yaml 加载），不含执行循环
 app/guardrails/    并发闸、审批、扫描、审计               ← 任何人可依赖
 app/observability/ 任务档案、控制台服务                   ← 只读 logs/ 与 session 产物
-app/domains/       业务域（daily / webportal / prd_watch / cmdb_watch）← 不允许反向依赖 gateway
+app/domains/       业务域（daily / skill_catalog …）← 不允许反向依赖 gateway
 ```
 
 **铁律**

@@ -5045,8 +5045,7 @@
         <path data-edge-from="dshcore" data-edge-to="skills" data-edge-label="路由候选集" data-edge-key="5" data-composition-points="1156,276;1156,146" d="M 1156 276 L 1156 146" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="dshcore" data-edge-to="mcp" data-edge-label="工具调用" data-edge-key="6" data-composition-points="1156,388;1156,486" d="M 1156 388 L 1156 486" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="mcp" data-edge-to="handlers" data-edge-label="dispatch" data-edge-key="7" data-composition-points="1058,526;950,526" d="M 1058 526 L 950 526" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="handlers" data-edge-to="a2a" data-edge-label="message:send" data-edge-key="8" data-composition-points="845,566;845,660" d="M 845 566 L 845 660" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="aggregator" data-edge-to="bypass" data-edge-label="非@消息截流" data-edge-key="9" data-composition-points="568,333;568,429.5;400,429.5;400,526" d="M 568 333 L 568 421.5 Q 568 429.5 560 429.5 L 408 429.5 Q 400 429.5 400 437.5 L 400 526" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="aggregator" data-edge-to="bypass" data-edge-label="非@消息截流" data-edge-key="8" data-composition-points="568,333;568,429.5;400,429.5;400,526" d="M 568 333 L 568 421.5 Q 568 429.5 560 429.5 L 408 429.5 Q 400 429.5 400 437.5 L 400 526" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-user" data-node-id="user" data-node-label="飞书用户" tabindex="0" role="button" aria-label="聚焦飞书用户，群聊 @ / 私聊, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="群聊 @ / 私聊" data-node-context="架构组件">
@@ -5142,38 +5141,26 @@
         <text data-detail="context" x="1156" y="540" class="t-muted" font-size="9" text-anchor="middle">feishu · domains · capabilities</text>
         </g>
 
-        <g id="node-handlers" data-node-id="handlers" data-node-label="Handler 能力执行" tabindex="0" role="button" aria-label="聚焦Handler 能力执行，数字先知 · CMDB · 定时 · 工单, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="数字先知 · CMDB · 定时 · 工单" data-node-context="架构组件">
-          <title>Handler 能力执行 · 数字先知 · CMDB · 定时 · 工单 · 架构组件</title>
+        <g id="node-handlers" data-node-id="handlers" data-node-label="Handler 能力执行" tabindex="0" role="button" aria-label="聚焦Handler 能力执行，数字先知 · 定时任务 · Skill 目录, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="数字先知 · 定时任务 · Skill 目录" data-node-context="架构组件">
+          <title>Handler 能力执行 · 数字先知 · 定时任务 · Skill 目录 · 架构组件</title>
           <rect x="740" y="486" width="210" height="80" rx="6" class="c-mask"/>
           <rect x="740" y="486" width="210" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(746 492) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="845" y="524" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Handler 能力执行</text>
-        <text data-detail="context" x="845" y="540" class="t-muted" font-size="9" text-anchor="middle">数字先知 · CMDB · 定时 · 工单</text>
+        <text data-detail="context" x="845" y="540" class="t-muted" font-size="9" text-anchor="middle">数字先知 · 定时任务 · Skill 目录</text>
         </g>
 
-        <g id="node-bypass" data-node-id="bypass" data-node-label="旁路服务" tabindex="0" role="button" aria-label="聚焦旁路服务，CMDB 提醒 · PRD 监听 · 调度, 旁路：不参与路由" aria-pressed="false" data-node-kind="backend" data-node-sublabel="CMDB 提醒 · PRD 监听 · 调度" data-node-context="旁路：不参与路由">
-          <title>旁路服务 · CMDB 提醒 · PRD 监听 · 调度 · 旁路：不参与路由</title>
+        <g id="node-bypass" data-node-id="bypass" data-node-label="旁路服务" tabindex="0" role="button" aria-label="聚焦旁路服务，旁路监听 · 状态面板, 旁路：不参与路由" aria-pressed="false" data-node-kind="backend" data-node-sublabel="旁路监听 · 状态面板" data-node-context="旁路：不参与路由">
+          <title>旁路服务 · 旁路监听 · 状态面板 · 旁路：不参与路由</title>
           <rect x="400" y="486" width="210" height="80" rx="6" class="c-mask"/>
           <rect x="400" y="486" width="210" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(406 492) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="505" y="524" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">旁路服务</text>
-        <text data-detail="context" x="505" y="540" class="t-muted" font-size="9" text-anchor="middle">CMDB 提醒 · PRD 监听 · 调度</text>
-        </g>
-
-        <g id="node-a2a" data-node-id="a2a" data-node-label="工单 A2A 服务" tabindex="0" role="button" aria-label="聚焦工单 A2A 服务，webportal-order-agent :8080, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="webportal-order-agent :8080" data-node-context="架构组件">
-          <title>工单 A2A 服务 · webportal-order-agent :8080 · 架构组件</title>
-          <rect x="740" y="660" width="210" height="76" rx="6" class="c-mask"/>
-          <rect x="740" y="660" width="210" height="76" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(746 666) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="845" y="696" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">工单 A2A 服务</text>
-        <text data-detail="context" x="845" y="712" class="t-muted" font-size="9" text-anchor="middle">webportal-order-agent :8080</text>
+        <text data-detail="context" x="505" y="540" class="t-muted" font-size="9" text-anchor="middle">旁路监听 · 状态面板</text>
         </g>
 
         <g id="node-dashboard" data-node-id="dashboard" data-node-label="控制台" tabindex="0" role="button" aria-label="聚焦控制台，:9112 任务档案 / 指标, 架构组件" aria-pressed="false" data-node-kind="frontend" data-node-sublabel=":9112 任务档案 / 指标" data-node-context="架构组件">
@@ -5223,11 +5210,7 @@
           <rect x="985.8" y="460" width="48.4" height="14" rx="3" class="c-mask"/>
           <text x="1010" y="470" class="t-muted" font-size="8" text-anchor="middle">dispatch</text>
         </g>
-        <g data-detail="context" data-edge-from="handlers" data-edge-to="a2a" data-edge-label="message:send" data-edge-key="8">
-          <rect x="846.2" y="620" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="880" y="630" class="t-muted" font-size="8" text-anchor="middle">message:send</text>
-        </g>
-        <g data-detail="context" data-edge-from="aggregator" data-edge-to="bypass" data-edge-label="非@消息截流" data-edge-key="9">
+        <g data-detail="context" data-edge-from="aggregator" data-edge-to="bypass" data-edge-label="非@消息截流" data-edge-key="8">
           <rect x="298.6" y="420" width="62.8" height="14" rx="3" class="c-mask"/>
           <text x="330" y="430" class="t-messagebus" font-size="8" text-anchor="middle">非@消息截流</text>
         </g>
@@ -5488,7 +5471,6 @@
           <h3>旁路不抢路由</h3>
         </div>
         <ul>
-          <li>&bull; CMDB 提醒 / PRD 监听 / 定时调度在 main.py 旁路运行，不进消息路由</li>
           <li>&bull; 授权群的非 @ 消息只进监听窗口，避免把同事闲聊送去作答</li>
           <li>&bull; 审批门照旧：定时任务创建必发 L2 卡片，订阅只绑发送者本人</li>
         </ul>

@@ -31,7 +31,6 @@
 | [capabilities-mcp.md](features/capabilities-mcp.md) | 能力目录 vs 执行入口两条线 |
 | [capability-hotplug.md](features/capability-hotplug.md) | 管理员飞书自助接入 + D1-D4 红线 |
 | [cmdb-order-watch.md](features/cmdb-order-watch.md) | 订阅 / 关注两条自助链路 |
-| [easyprd-prd-watch.md](features/easyprd-prd-watch.md) | 评论与卡片格式契约、决策闭环 |
 | [skill-catalog.md](features/skill-catalog.md) | 团队技能目录 + 规范状态机 |
 | [cc-connect-delivery.md](features/cc-connect-delivery.md) | cc-connect 投递与迟到结果 |
 

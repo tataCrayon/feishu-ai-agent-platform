@@ -351,7 +351,7 @@ def test_caller_identity_reaches_supervisor_on_session_open() -> None:
         gateway, supervisor = _make_gateway()
         try:
             await gateway.handle(
-                "订阅 CMDB 工单提醒 devuser", "oc_chat",
+                "帮我订阅每日提醒", "oc_chat",
                 caller={"sender_id": "ou_42", "sender_name": "张三"},
             )
         finally:

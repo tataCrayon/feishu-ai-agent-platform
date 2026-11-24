@@ -19,8 +19,8 @@
 ## 为什么写 Markdown 而不是再写一份 JSON
 
 复盘时读的是「模型说了什么、调了什么、拿到什么」。JSON 里这些是转义过的长字符串，
-人眼和 grep 都不友好；Markdown 的代码块天然隔离工具输出，`grep -l "webportal"`
-就能定位到具体哪几轮碰过工单能力。
+人眼和 grep 都不友好；Markdown 的代码块天然隔离工具输出，`grep -l "read_doc"`
+就能定位到具体哪几轮碰过读文档能力。
 
 ## 失败语义
 
@@ -186,7 +186,7 @@ class TurnTraceRecorder:
         chat_id: str = "",
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """按索引筛轮次（新→旧）。tool 走子串匹配（`webportal` 能命中整条前缀）。"""
+        """按索引筛轮次（新→旧）。tool 走子串匹配（`read` 能命中整条前缀）。"""
         out: list[dict[str, Any]] = []
         now = datetime.now(TZ)
         months = sorted({(now - timedelta(days=d)).strftime("%Y-%m")

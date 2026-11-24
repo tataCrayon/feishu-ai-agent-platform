@@ -46,7 +46,7 @@ def test_feedback_card_buttons_carry_callback_behaviors() -> None:
 
 
 def test_is_feedback_action_recognizes_own_card_only() -> None:
-    """别的卡片（能力审批 / PRD / 定时任务）点了不该被这里认领。"""
+    """别的卡片（能力审批 / 定时任务 / 通知）点了不该被这里认领。"""
     assert is_feedback_action(_event({FB_KEY: ACTION_UP, TASK_KEY: "t1"}))
     assert is_feedback_action(_event({FB_KEY: ACTION_DOWN, TASK_KEY: "t1"}))
     assert not is_feedback_action(_event({"task": "task-123", "act": "approve"}))
@@ -138,7 +138,7 @@ def test_summarize_reports_negative_rate_per_agent(tmp_path) -> None:
     rec = _recorder(tmp_path)
     _write(rec, task_id="a1", final_agent="aihot")
     _write(rec, task_id="a2", final_agent="aihot")
-    _write(rec, task_id="b1", final_agent="webportal-agent")
+    _write(rec, task_id="b1", final_agent="schedule-agent")
     rec.attach_feedback_by_task("a1", {"negative": True, "text": "🙃", "source": "button"})
 
     summary = rec.summarize(days=1)
@@ -146,5 +146,5 @@ def test_summarize_reports_negative_rate_per_agent(tmp_path) -> None:
     assert agents["aihot"]["count"] == 2
     assert agents["aihot"]["negative"] == 1
     assert agents["aihot"]["negative_rate"] == 0.5
-    assert agents["webportal-agent"]["negative_rate"] == 0.0
+    assert agents["schedule-agent"]["negative_rate"] == 0.0
     assert summary["negative_count"] == 1

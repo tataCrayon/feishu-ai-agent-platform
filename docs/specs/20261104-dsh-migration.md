@@ -32,7 +32,7 @@ actor: 飞书用户（L0/L1）
 goal: 发一个多步任务，机器人真的做完，且中途能看见在干什么
 
 场景: 多步任务带进度
-1. Given 群里有人 @机器人 说"把这个工单处理了"（附 3 个附件）
+1. Given 群里有人 @机器人 说"把这份材料处理了"（附 3 个附件）
    When  消息发出
    Then  [用户看到] 秒回 ack「已接收 1 条，正在处理」        #走查①④
 2. When  dsh 开始执行、第一次调用工具
@@ -127,9 +127,9 @@ actor: 飞书用户（次日再聊）
 goal: 不用把昨天说过的事重讲一遍
 
 场景: 跨会话事实复用
-1. Given 用户昨天让 bot 处理过某张 CMDB 工单、并说过"以后默认用 SIT 环境"
-   When  今天用户说"还是那个工单，再查一次"
-   Then  [用户看到] 直接按 SIT + 原工单查，不反问"哪个工单/哪个环境"   #走查③④
+1. Given 用户昨天让 bot 处理过某件事、并说过"以后默认用测试环境"
+   When  今天用户说"还是那件事，再查一次"
+   Then  [用户看到] 直接按测试环境 + 原对象查，不反问"哪个对象/哪个环境"   #走查③④
 ```
 
 ---
@@ -215,9 +215,9 @@ dsh 进程（ACP stdio）接管全部 agent 执行。会话按 `chat_id` 常驻�
 
 | 类别 | Agent | 迁移方式 |
 |---|---|---|
-| 确定性引擎（保留 Python 逻辑） | webportal-agent、daily-agent、merge-check-agent、digital-oracle-agent、schedule-agent、skill-catalog-agent、cmdb-watch-agent、prd-watch-agent | 包成 MCP server，工具层调用 |
-| 纯能力型 | db-agent、deploy-agent、config-agent | 由对应 MCP server（mysql/cmdb/nacos）提供工具，agent 定义简化为 preset |
-| 维护者通道 | rwa-bot | 保留 `/dev` 直达，`routable: false` 不变 |
+| 确定性引擎（保留 Python 逻辑） | digital-oracle-agent、schedule-agent、skill-catalog-agent | 包成 MCP server，工具层调用 |
+| 纯能力型 | 外部数据源类 agent | 由对应 MCP server 提供工具，agent 定义简化为 preset |
+| 维护者通道 | dev-bot | 保留 `/dev` 直达，`routable: false` 不变 |
 | skill 合成 agent | skill-aihot、skill-demo-guard、skill-elk-log-query、skill-news-sql-generator、skill-x | 不再合成 agent，直接是 dsh 技能 |
 
 **AC-8.1**：每个 agent 至少 1 条真实输入端到端跑通，输出与迁移前可比。
@@ -272,26 +272,17 @@ dsh 进程（ACP stdio）接管全部 agent 执行。会话按 `chat_id` 常驻�
 
 **AC-11.3**：`verify_spec.py` 覆盖本 spec 全部 AC。
 
-### R12 独立工单 Agent 对接 → 时序1
+### R12 外部 Agent 对接 → 时序1
 
-`webportal-order-agent` 是**独立仓库**（`D:\Projects\vscode-projects\webportal-order-agent`），
-已有两种投影：A2A server（`python -m order_agent.a2a_server`，127.0.0.1:8080）与 MCP server（`python -m order_agent.mcp_server`，stdio）。
+外部能力可以独立仓库承载（A2A server 或 stdio MCP server），本仓只做两种投影之一：
 
-迁移后**优先用 MCP 投影**（工具契约一致，且 dsh 原生挂载 stdio MCP）：
+- **MCP 投影优先**：工具契约一致，dsh 原生挂载 stdio MCP，`[projects.mcp.<name>]`
+  里写 `command/args/cwd` 即可；
+- A2A 投影：留给需要多轮聚合与文件透传的能力，客户端壳留在 Handler。
 
-| 工具 | 用途 |
-|---|---|
-| `run_ticket(text)` | 工单文本 → SQL（命中案例则高可信，未命中 advisory 低可信） |
-| `ingest_order(order_id)` | 从 CMDB 只读采集生成 draft 案例 |
-| `list_cases(status)` | 案例列表 |
-| `query_production(sql, db_name)` | 只读查询 |
-| `ingest_feishu / sync_case / set_case_status / check_cases` | 案例库治理 |
+**AC-12.1**：dsh 会话能挂载并调通外部 MCP server 的至少一个工具。
 
-**AC-12.1**：dsh 会话通过 MCP 挂载 `order_agent.mcp_server`，`run_ticket` 调用成功。
-
-**AC-12.2**：`webportal_handler.py` 的 A2A 客户端壳退役，改由 MCP 工具直连；多轮聚合（TTL 10 分钟）语义由 dsh 会话保留。
-
-**AC-12.3**：工单处理的红线不变——SQL 只产出不执行、CMDB 仅 GET、draft 案例不参与检索（均在 order_agent 引擎内，本侧不新增）
+**AC-12.2**：Handler 只做协议壳，判定逻辑全在外部服务，本侧不重复实现。
 
 ### R13 退役清理
 
@@ -333,6 +324,6 @@ dsh 进程（ACP stdio）接管全部 agent 执行。会话按 `chat_id` 常驻�
 | Q3 | `agent.yaml` 保留 `name/display_name/description/permission_level/enabled` | ✅ 已定 |
 | Q4 | 迁移窗口：允许每阶段停机 10 分钟 | ✅ 已定 |
 | Q5 | memory 与 bot 一体（MCP 内嵌，不独立进程） | ✅ 已定 |
-| Q6 | `app/domains/{prd_watch,cmdb_watch,daily,webportal}` 由另一方持续开发，本重构只改调用入口 | ⚠️ 待对方确认边界 |
+| Q6 | 业务域（`app/domains/*`）由能力 Owner 持续开发，本重构只改调用入口 | ✅ 已定 |
 
 实施顺序与阶段进度见 `docs/project-index.md`「dsh 迁移阶段进度」。

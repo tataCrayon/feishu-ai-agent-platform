@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # （见 exclusive_domain_agents()）；本常量仅作为 registry 缺席时的静态兜底保留。
 LEGACY_HARD_PROFESSIONAL_AGENTS = {
     "db-agent",
-    "webportal-agent",
 }
 
 

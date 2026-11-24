@@ -161,12 +161,12 @@ node node_modules/@deepseek-ai/dsh/lib/bin.js \
 
 | 来源 | 内容 |
 |---|---|
-| `config.toml [projects.mcp]` | 本仓自己实现的 `feishu` / `domains` / `capabilities` / `order_agent` |
-| 各 `bot/agents/*/agent.yaml` 的 `mcp_servers` | 数据源：MySQL、CMDB、Nacos（同名只挂一次） |
+| `config.toml [projects.mcp]` | 本仓自己实现的 `feishu` / `domains` / `capabilities` |
+| 各 `bot/agents/*/agent.yaml` 的 `mcp_servers` | 该能力自带的数据源（同名只挂一次） |
 
 `capabilities` 是**能力的执行入口**，不是可选项：技能目录只放「名字 + 描述」进路由
 候选集，真正动手要靠工具。它把各 Handler 的 `tools` 原样投影成 MCP 工具
-（数字先知 `gather_signals`、CMDB 订阅/关注、定时任务读写、工单、Skill 目录）。
+（数字先知 `gather_signals`、定时任务读写、Skill 目录）。
 不挂它，模型会如实回答「本会话没有这个执行入口」——能力清单看着有、实际做不了。
 细节见 `docs/features/capabilities-mcp.md`。
 
@@ -185,11 +185,6 @@ dsh 给**每个会话**拉起独立的一份 MCP 进程（实测：同一 spec �
 
 **某个 MCP 起不来时把它 `enabled = false`，别挂着**：dsh 对 MCP 启动失败的处理是
 `session/new` 直接拒绝，表现出来是「bot 完全不回话」，而不是「这项能力不可用」。
-
-正在修的：`order_agent` 已置 false——对方仓 `.venv` 的 mcp 升到 2.x，而其
-`order_agent/mcp_server.py` 仍 import 1.x 的 `mcp.server.fastmcp`，一启动就
-`ModuleNotFoundError`。修复在对方仓（`requirements.txt` pin `mcp<2`，或迁到
-`MCPServer`），本仓只负责指过去。
 
 ## 与 `~/.dsh/profiles/acp` 的关系
 

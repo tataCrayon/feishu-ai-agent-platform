@@ -72,7 +72,7 @@ def test_buttons_without_value_are_left_alone() -> None:
 
 
 def test_nested_buttons_in_columns_are_fixed() -> None:
-    """按钮常被包在 column_set 里（PRD 卡片就是），遍历必须下钻。"""
+    """按钮常被包在 column_set 里（通知卡就是），遍历必须下钻。"""
     card = {"body": {"elements": [{"tag": "column_set", "columns": [
         {"tag": "column", "elements": [{"tag": "button", "value": {"cr": "CR-2"}}]},
     ]}]}}

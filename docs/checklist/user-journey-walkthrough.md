@@ -22,7 +22,7 @@
 
 | 字段 | 值 |
 |------|-----|
-| 功能 / Spec | <!-- 如 SPEC-20261104-dsh-migration / features/easyprd-prd-watch.md --> |
+| 功能 / Spec | <!-- 如 SPEC-20261104-dsh-migration / features/routing-dispatch.md --> |
 | 时序来源 | <!-- docs/specs/xxx.md §二 --> |
 | Actor（单视角） | <!-- 如 L2 管理员、普通群成员 --> |
 | 日期 / 执行人 | <!-- --> |

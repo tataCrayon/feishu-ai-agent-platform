@@ -5,8 +5,6 @@
 不负责：日报生成、合并判定、目录扫描、任务状态机——全部调用下层实现
 （conventions L3：工具层不得与业务逻辑双写）。
 调用方：dsh 按 `[projects.mcp.domains]` 以子进程挂载。
-
-`prd_watch` / `cmdb_watch` 由另一团队并行开发，本期不封装。
 """
 
 from __future__ import annotations

@@ -33,7 +33,7 @@ AGENTS_DIR = PROJECT_DIR / "bot" / "agents"
 AGENT_CONFIG_NAME = "agent.yaml"
 
 # 合法的执行通道类型（transport）
-VALID_TRANSPORTS = ("handler", "cc_connect", "webportal")
+VALID_TRANSPORTS = ("handler", "cc_connect")
 
 
 @dataclass
@@ -59,9 +59,8 @@ class AgentDef:
     enabled: bool = True
     timeout_sec: int = 60
 
-    # 执行通道：handler=进程内 Python Handler；cc_connect=Claude Code 桥接；
-    # webportal=工单 API。cc-connect 只是普通
-    # 执行通道之一，与 handler 平级（不再是全局默认主流程）。
+    # 执行通道：handler=进程内 Python Handler；cc_connect=Claude Code 桥接。
+    # 两者平级，cc-connect 不再是全局默认主流程。
     transport: str = "cc_connect"
 
     # 专属领域声明：编排层在多意图分派时抑制其并行 extra_calls —— 专属域的

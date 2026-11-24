@@ -29,18 +29,6 @@ _ARCH_DIAGRAMS = {
 dashboard_app = FastAPI(title="AgentMate Agent Dashboard", version="1.0.0")
 dashboard_app.include_router(router)
 
-# PM 能力接口（`/api/pm/*`）：给外部调用方的薄封装，与运维台 `/api/stats/*` 互不重叠。
-# 未启用时每条路由自己返回 503，不在挂载期判断——挂载期判断会让「配置改了没重启」
-# 表现为路由 404，比 503 更难查。
-from app.api.pm_capabilities import pm_router  # noqa: E402
-
-dashboard_app.include_router(pm_router)
-
-# PM 私聊转发的接收端：pm_run 判「不归 PM」时投到这里走完整 dsh 路由。
-# 只监听回环、只在本机可达——详见 app/api/pm_relay.py 头部。
-from app.api.pm_relay import relay_router  # noqa: E402
-
-dashboard_app.include_router(relay_router)
 
 
 @dashboard_app.get("/", include_in_schema=False)

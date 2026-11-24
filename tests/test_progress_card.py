@@ -17,7 +17,7 @@ def test_thought_and_actions_interleave_in_arrival_order():
     t.observe("thought", "先确认要回答的是两件事")
     t.observe("tool_start", "加载能力说明")
     t.observe("tool_done", "加载能力说明")
-    t.observe("thought", "工单状态是卡住的那一步，先取它")
+    t.observe("thought", "任务状态是卡住的那一步，先取它")
     kinds = [b.kind for b in t.blocks]
     assert kinds == ["thought", "action", "thought"]
 
@@ -25,17 +25,17 @@ def test_thought_and_actions_interleave_in_arrival_order():
 def test_consecutive_thought_frames_merge_into_one_block():
     """同一段推理被切成几十帧；逐帧成块会让卡片变成碎句墙。"""
     t = Timeline()
-    for chunk in ("先取工单，", "它的数据源不同，", "再拉资讯。"):
+    for chunk in ("先取状态，", "它的数据源不同，", "再拉资讯。"):
         t.observe("thought", chunk)
     assert len(t.blocks) == 1
-    assert t.blocks[0].text == "先取工单，它的数据源不同，再拉资讯。"
+    assert t.blocks[0].text == "先取状态，它的数据源不同，再拉资讯。"
 
 
 def test_tool_started_and_done_occupy_one_line():
     """一次调用有 started/done 两帧，卡片上只该占一行。"""
     t = Timeline()
-    t.observe("tool_start", "查看关注的工单")
-    t.observe("tool_done", "查看关注的工单")
+    t.observe("tool_start", "查看关注的任务")
+    t.observe("tool_done", "查看关注的任务")
     assert sum(1 for b in t.blocks if b.kind == "action") == 1
     assert t.blocks[0].status == "done"
 
@@ -81,11 +81,11 @@ def test_answer_with_table_becomes_native_component():
     )
     timeline = Timeline()
     timeline.observe("thought", "先看两个任务的状态")
-    timeline.observe("tool_start", "查看执行的工单")
-    timeline.observe("tool_done", "查看执行的工单")
+    timeline.observe("tool_start", "查看执行的任务")
+    timeline.observe("tool_done", "查看执行的任务")
     timeline.observe("tool_start", "查看建表任务")
     timeline.observe("tool_done", "查看建表任务")
-    card = build_done("看工单 5784", timeline, answer, task_id="t1")
+    card = build_done("看任务 5784", timeline, answer, task_id="t1")
     tags = _tags(card)
     assert "table" in tags
     assert "collapsible_panel" in tags
@@ -109,9 +109,9 @@ def test_header_shows_the_answer_not_the_brand():
     """头部是唯一必然被看到的位置，写结论比写 AgentMate 有用。"""
     from app.dsh.progress_card import build_done
 
-    card = build_done("给我讲讲 AI 热点", Timeline(), "**工单 5784** 正在执行，1 个任务已完成。")
+    card = build_done("给我讲讲 AI 热点", Timeline(), "**任务 5784** 正在执行，1 个任务已完成。")
     assert "AgentMate" not in card["header"]["title"]["content"]
-    assert "工单 5784" in card["header"]["title"]["content"]
+    assert "任务 5784" in card["header"]["title"]["content"]
 
 
 def test_oversized_answer_is_flagged_for_text_fallback():

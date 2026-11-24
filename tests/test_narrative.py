@@ -92,14 +92,14 @@ def test_all_registered_tool_labels_are_non_empty() -> None:
 def test_common_tools_have_a_curated_label() -> None:
     """常用工具必须有专属文案：落到尾段/kind 兜底就等于把工具名还给用户。
 
-    `mcp__capabilities__list_cmdb_watches` 曾经没登记，卡片上显示的是工具名；
+    `mcp__capabilities__refresh_skill_catalog` 曾经没登记，卡片上显示的是工具名；
     `mcp__domains__daily_report` 更糟——尾段 `daily_report` 被当成一般名字透出。
     """
     from app.dsh.narrative import _TOOLS
 
     for name in (
-        "mcp__capabilities__list_cmdb_watches",
-        "mcp__capabilities__cmdb_watch_status",
+        "mcp__capabilities__refresh_skill_catalog",
+        "mcp__capabilities__get_skill_status",
         "mcp__capabilities__list_tasks",
         "mcp__domains__daily_report",
         "mcp__feishu__read_conversation",

@@ -33,7 +33,7 @@ from pathlib import Path
 _DATE_RE = re.compile(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}")
 # 「谁说的」类叙述
 _WHO_RE = re.compile(r"用户(?:指出|要求|反馈|指定|提出|明确|第二轮|两次)|上一版|原来是|现在改成")
-# 裸待办标记（缺 @人 / 工单号）
+# 裸待办标记（缺 @人 / 依据）
 _TODO_RE = re.compile(r"\b(TODO|XXX|FIXME)\b(?!\s*[（(]?\s*(?:@|#|[A-Z]+-\d+))")
 _COMMENT_RE = re.compile(r"(?P<indent>\s*)#(?P<body>.*)$")
 
@@ -61,7 +61,7 @@ def lint_file(path: Path) -> list[tuple[int, str, str]]:
         elif _WHO_RE.search(body):
             out.append((no, "谁提的需求", body.strip()[:100]))
         elif _TODO_RE.search(body):
-            out.append((no, "裸待办标记（缺 @人/工单号）", body.strip()[:100]))
+            out.append((no, "裸待办标记（缺 @人/依据）", body.strip()[:100]))
     return out
 
 

@@ -160,7 +160,6 @@ def _video_duration(raw: bytes) -> float:
 def _read_plain_document(path: Path) -> str:
     """无引擎文档解析：txt/md/csv/json/sql 直读、pdf 文本层、.msg/.eml 邮件。
 
-    工单引擎已迁出为独立 A2A 服务（webportal-order-agent，v3.0.0 去 vendor），
     multimodal 作为通道层文档解析器自带实现。pdf 不做视觉回退（本模块调用点
     无 LLM 客户端，扫描件解析为空由调用方降级 note）；图片资源不进本函数
     （download_media_bundle 对 image 走 vision parts 分流）。
@@ -499,7 +498,7 @@ def _xls_text(raw: bytes) -> str:
 
 
 def _docx_text(raw: bytes) -> str:
-    """docx → 文本：段落按序 + 表格逐行（表格结构是工单/清单类文档的关键信息）。"""
+    """docx → 文本：段落按序 + 表格逐行（表格结构是清单/规格类文档的关键信息）。"""
     from io import BytesIO
 
     import docx

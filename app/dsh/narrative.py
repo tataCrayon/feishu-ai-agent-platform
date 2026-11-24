@@ -44,32 +44,19 @@ _TOOLS: dict[str, str] = {
     "create_goal": "拆解为长任务",
     # 能力面（MCP capabilities）
     "mcp__capabilities__gather_signals": "获取市场信号",
-    "mcp__capabilities__subscribe_cmdb_watch": "登记工单订阅",
-    "mcp__capabilities__unsubscribe_cmdb_watch": "取消工单订阅",
-    "mcp__capabilities__watch_cmdb_order": "关注单张工单",
-    "mcp__capabilities__unwatch_cmdb_order": "取消工单关注",
-    "mcp__capabilities__list_cmdb_watches": "查看关注的工单",
-    "mcp__capabilities__cmdb_watch_status": "查询提醒状态",
     "mcp__capabilities__create_scheduled_task": "创建定时任务",
     "mcp__capabilities__list_tasks": "查看定时任务",
     "mcp__capabilities__cancel_task": "取消定时任务",
     "mcp__capabilities__pause_task": "暂停定时任务",
     "mcp__capabilities__resume_task": "恢复定时任务",
     "mcp__capabilities__get_task": "查看任务详情",
-    "mcp__capabilities__fetch_approval": "读取待审批项",
-    "mcp__capabilities__prd_watch_status": "查询 PRD 监听状态",
     "mcp__capabilities__list_team_skills": "读取团队能力目录",
     "mcp__capabilities__get_skill_status_board": "读取能力状态板",
     "mcp__capabilities__get_skill_status": "查询能力详情",
     "mcp__capabilities__find_similar_skills": "比对已有能力",
     "mcp__capabilities__review_skill": "评审能力说明",
     "mcp__capabilities__refresh_skill_catalog": "刷新能力目录",
-    "mcp__capabilities__process_order": "解析工单并生成方案",
-    "mcp__capabilities__ingest_order": "沉淀工单案例",
-    "mcp__capabilities__list_cases": "查看案例库",
-    "mcp__capabilities__confirm_case": "确认案例",
-    "mcp__capabilities__sync_case": "同步案例",
-    # 能力面（MCP feishu / domains / order_agent）
+    # 能力面（MCP feishu / domains）
     "mcp__feishu__read_conversation": "读取会话上下文",
     "mcp__feishu__read_doc": "读取飞书文档",
     "mcp__feishu__send_message": "发送消息",
@@ -78,9 +65,6 @@ _TOOLS: dict[str, str] = {
     "mcp__domains__skill_catalog_query": "查询能力目录",
     "mcp__domains__daily_report": "读取日报",
     "mcp__domains__list_schedules": "查看定时任务",
-    "mcp__order_agent__run_ticket": "解析工单并生成方案",
-    "mcp__order_agent__query_production": "查询生产数据",
-    "mcp__order_agent__list_cases": "查看案例库",
 }
 
 # 尾段索引：`mcp__<server>__<tool>` 的 server 名可变（换前缀、裸名调用），

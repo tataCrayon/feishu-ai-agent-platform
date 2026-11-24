@@ -124,7 +124,7 @@ class BotChannel:
         log_level: LogLevel = LogLevel.INFO,
         no_mention_chats: list[str] | None = None,
     ):
-        """no_mention_chats: 这些群放开「不@我也推消息」（easyprd 监听用）。
+        """no_mention_chats: 这些群放开「不@我也推消息」（旁路监听用）。
 
         默认全局 require_mention=True——群里不@机器人的消息根本不进本进程。
         只对显式列出的 chat_id 做覆盖（SDK 的 policy.group_overrides 语义），
@@ -369,13 +369,13 @@ class BotChannel:
         )
 
     async def download_resources(self, msg: InboundMessage, dest_dir: str) -> list[dict]:
-        """下载消息中的附件资源，返回 webportal attachment dict 列表。
+        """下载消息中的附件资源，返回附件 dict 列表（文件名/路径/类型/大小）。
 
         对每条 resources 用 FeishuChannel.download_resource_to_file 下载，
         收集 {filename, file_path, doc_type, size}。失败附件跳过（不阻断）。
 
         安全校验：
-        - 按会话/消息隔离到子目录（避免多工单附件混存）
+        - 按会话/消息隔离到子目录（避免多轮附件混存）
         - 扩展名白名单（仅文本/表格/图片等可解析类型）
         - 文件大小上限
         """
@@ -384,9 +384,9 @@ class BotChannel:
             return []
         from pathlib import Path
 
-        # 扩展名白名单 + 大小上限（webportal 解析需求）
-        # .msg/.eml：Outlook 邮件文件（工单授权邮件常以 .msg 转发，
-        # 工单场景由 A2A 服务端解析，其余文档走 multimodal 通道层解析）
+        # 扩展名白名单 + 大小上限（解析器能吃下的类型）
+        # .msg/.eml：Outlook 邮件文件（常以附件转发的往来邮件，
+        # 由 multimodal 通道层解析）
         # 与 `app.multimodal._DOC_EXTS` 保持同一份口径：这里拦掉的后缀，
         # 解析器再强也读不到（用户看到的是「附件被拒」，不是「不支持解析」）。
         _ALLOWED_EXTS = {".md", ".txt", ".csv", ".tsv", ".xlsx", ".xls", ".doc", ".docx",
@@ -457,7 +457,7 @@ class BotChannel:
     ) -> list[dict]:
         """回看本群最近消息，下载同一发送者、within_sec 内的文件和图片。
 
-        飞书「回复」不携带更早几条消息上的附件。工单描述和文件常常是
+        飞书「回复」不携带更早几条消息上的附件。问题描述和文件常常是
         分开的两条，只读当前消息会得到空附件列表。
         """
         import time

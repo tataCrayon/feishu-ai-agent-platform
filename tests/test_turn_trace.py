@@ -83,7 +83,7 @@ def test_recorder_writes_markdown_and_index(tmp_path) -> None:
 
 def test_recorder_search_filters_by_tool_and_status(tmp_path) -> None:
     rec = TurnTraceRecorder(log_dir=tmp_path)
-    rec.write(TurnTrace(task_id="a", query="工单",
+    rec.write(TurnTrace(task_id="a", query="查状态",
                         steps=[TurnStep(name="mcp__capabilities__process_order")],
                         status="success"))
     rec.write(TurnTrace(task_id="b", query="闲聊", steps=[], status="success"))

@@ -461,7 +461,7 @@ _DEFAULT_DECOMPOSE_PROMPT = (
 )
 
 _DEFAULT_HELP_REPLY = (
-    "{greeting}！我是中台核心组数字助手。\n"
+    "{greeting}！我是团队数字助手。\n"
     "能力清单以 /help 为准（由当前注册表生成）。\n"
     "这份回复是帮助文案加载失败时的兜底，不列举命令，避免把已下线的入口说成还能用。"
 )

@@ -24,10 +24,10 @@ dsh 内核 (ACP over stdio)
     └─ 多轮：会话常驻，同一 chat 粘同一 session
     │
 MCP 工具面（每会话一份子进程，身份经 env 固化）
-    ├─ capabilities ── 进程内 Handler 的 tools 原样投影（工单 / 数据库 / CMDB / 定时任务…）
+    ├─ capabilities ── 进程内 Handler 的 tools 原样投影（数字先知 / 定时任务 / 技能目录…）
     ├─ feishu ──────── 发/回消息、读文档、读当前会话上下文
     ├─ domains ─────── 业务域只读入口
-    └─ agent.yaml 声明的数据源（MySQL / CMDB / Nacos，同名只挂一次）
+    └─ agent.yaml 声明的数据源（同名只挂一次）
     │
 回复飞书（进度卡 → 正文）+ trace/TaskRecord + 记忆捕获
 ```
@@ -64,7 +64,7 @@ python -m app.main                                    # 飞书 WS + Dashboard :9
 | mcp | `app/mcp/` | 会话工具面：feishu / domains / capabilities |
 | agents | `app/agents/` | Agent 注册表 + Handler 约定式自动发现 |
 | ops | `app/ops/` | 能力热插拔、定时任务、健康探针 |
-| domains | `app/domains/` | 业务域（日报 / PRD 评审 / PM 工作台 / 工单 …） |
+| domains | `app/domains/` | 业务域（日报 / 技能目录 …，新能力按同样形状加子包） |
 | guardrails | `app/guardrails/` | 并发闸、SQL/命令拦截、审计 |
 | observability | `app/observability/` | 任务档案、trace、成本、巡检报表 |
 | 单源 | `bot/agents/` `bot/prompts/` `bot/skills/` | Agent 声明 / 提示词 / 能力包 |
@@ -101,13 +101,14 @@ python app/eval/prompt_eval.py                         # 提示词 golden 回归
 
 | Agent | 通道 | 做什么 |
 |---|---|---|
-| `prd-watch-agent` | handler | PRD 评审（一致性/可执行性/验收/证据四维）、变更监听、卡片裁决 |
-| `pm-hub-agent` | handler | PM 工作台：会议待办、日报、排期同步、消息分流 |
+| `aihot` | skill | AI 资讯 / 日报（卡片出口，文本兜底） |
 | `schedule-agent` | handler | 定时/周期任务：评估通过即生效 |
-| `cmdb-watch-agent` | handler | CMDB 工单状态订阅与卡片提醒 |
-| `webportal-agent` | A2A | 工单→SQL（能力在独立服务，仓内只有客户端壳） |
-| `skill-catalog-agent` | handler | 团队 Skill 目录检索 |
-| `dev-bot` / `db-agent` / `deploy-agent` / `config-agent` | cc-connect | 桥接本地 Claude Code 的通用/角色执行通道 |
+| `digital-oracle-agent` | handler | 市场数据驱动的概率预测 |
+| `skill-catalog-agent` | handler | 团队 Skill 目录检索与治理 |
+| `dev-bot` | cc-connect | 桥接本地 Claude Code 的开发通道（`/dev` 直达） |
+
+骨架里只留这几个**示例能力**，用来验证「声明 → 同步 → 路由 → 执行 → 交付」整条链路；
+你自己的业务能力按同样形状往里加（见「加一个能力」）。
 
 ## 文档地图
 

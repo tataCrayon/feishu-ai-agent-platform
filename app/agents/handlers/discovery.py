@@ -6,7 +6,7 @@
    未定义 build 时取模块内第一个 AgentHandler 子类，`cls(config)` 构造
 3. Handler 类属性 `agent_name` 作为注册键
 
-ctx 为启动期共享资源字典（如 {"case_mirror": config.case_mirror}），
+ctx 为启动期共享资源字典（如 {"skill_catalog": store}），
 由 main.py 组装后传入，供需要外部依赖的 build 使用。
 """
 

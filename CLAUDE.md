@@ -26,20 +26,19 @@ dsh 内核 (ACP over stdio, 仓库内 node_modules 钉版本)
     └─ 多轮：会话常驻，chat 粘同一个 session
     │
 MCP 工具面（每个会话各拉一份子进程，身份经 env 固化）
-    ├─ capabilities —— 进程内 Handler 的 tools 原样投影：数字先知 / CMDB 提醒 /
-    │   PRD 监听 / 定时任务 / 工单 / Skill 目录（**执行入口**，不挂就等于没能力）
+    ├─ capabilities —— 进程内 Handler 的 tools 原样投影：数字先知 / 定时任务 /
+    │   Skill 目录（**执行入口**，不挂就等于没能力）
     ├─ feishu —— 发/回消息、读文档、read_conversation（当前会话最近消息）
     ├─ domains —— 日报、Skill 目录、定时任务只读
-    └─ agent.yaml 声明的数据源（MySQL / CMDB / Nacos，同名只挂一次）
+    └─ agent.yaml 声明的数据源（同名只挂一次）
     │
 Handler（app/agents/handlers/，约定式自动发现）
-    webportal-agent（工单→SQL：A2A 客户端壳，能力在 webportal-order-agent:8080）
-    digital-oracle-agent / cmdb-watch-agent / prd-watch-agent / schedule-agent / skill-catalog-agent
+    digital-oracle-agent / schedule-agent / skill-catalog-agent
     │
 回复飞书（进度卡 → 正文）＋ 记忆捕获 ＋ trace/TaskRecord
 ```
 
-**旁路服务不进路由**：CMDB 提醒、PRD 监听、定时调度在 `main.py` 侧独立跑；授权群的
+**旁路服务不进路由**：消息订阅与定时调度在 `main.py` 侧独立跑；授权群的
 非 @ 消息只进监听窗口，避免把同事闲聊送去作答。定时任务的**执行面与消息链路同一条**
 （`ScheduledTaskExecutor` 优先走 `DshGateway`），否则到点产出会与手动提问得到两套结果。
 
@@ -65,6 +64,7 @@ Handler（app/agents/handlers/，约定式自动发现）
 | **dsh** | `app/dsh/` | 执行面：`supervisor.py`（进程托管+自愈+MCP 规格）、`adapter.py`（ACP over stdio）、`gateway.py`（chat→session + 串行 + TTL）、`media.py`（MediaBundle→ACP 块）、`routing.py`（会话指令单源） |
 | **mcp** | `app/mcp/` | 会话工具面：`feishu_server` / `domains_server` / `capabilities_server`（Handler tools 投影）/ `order_agent_server` |
 | **orchestrator** | `app/orchestrator/` | 权限判定（`get_user_permission`）+ **回切保险**：`crew.py`（LangGraph router→agent→gather）、`router.py`、`direct.py`、`feedback.py`、`reroute_rules.py`、`history.py`。dsh 启用时不参与消息路由 |
+| **api** | `app/api/` | 控制台之外、供**外部进程**调用的 HTTP 端点（与运维台 `/api/stats/*` 互不重叠；未启用时逐条返回 503，避免「改了配置没重启」表现成 404） |
 | **agents** | `app/agents/` | `registry.py`（AgentDef + `bot/agents/*/agent.yaml` 发现）、`handlers/`（`{name}_handler.py` 约定式自动发现）、`skills.py`（SKILL.md → 合成 Agent） |
 | **memory** | `app/memory/` | MemoryCore 网关客户端（capture/recall/session） |
 | **protocols** | `app/protocols/` | `cc_connect/`（Claude Code 桥接）、`feishu_send.py` |
@@ -72,7 +72,7 @@ Handler（app/agents/handlers/，约定式自动发现）
 | **guardrails** | `app/guardrails/` | `runtime/`（并发闸 + 任务持久化）、`security_guard.py`（SQL/命令拦截）、`audit_logger.py`；权限白名单在 `bot/todos/whitelist.json` + `orchestrator/__init__.py` |
 | **observability** | `app/observability/` | `task_record.py`（`logs/tasks/`）、`dashboard_service`、`cc_usage_service`、巡检报表（`heartbeat` / `task_report` / `token_monitor` / `cache_monitor` / `dashboard_snapshot`） |
 | **ops** | `app/ops/` | `capability/`（能力热插拔）、`scheduler/`（定时任务）、`health/`（Agent 健康探针）、`model_switch.py`、`proctree.ps1` |
-| **domains** | `app/domains/` | 业务域：`daily/`、`webportal/`（工单 A2A + 案例镜像）、`skill_catalog/`、`ai_consultant/`、`cmdb_watch/`、`prd_watch/` |
+| **domains** | `app/domains/` | 业务域：`daily/`（资讯日报）、`skill_catalog/`（技能目录）—— 新能力按同样形状加子包 |
 | 单源 | `bot/agents/*/agent.yaml`、`bot/prompts/`、`bot/skills/*/SKILL.md`、`deploy/dsh/agentbiz/skills.allowlist` | Agent / 提示词 / Skill 源 / dsh 路由候选集白名单 |
 | 配置 | `config.toml` | dsh 执行面 + MCP 四个 server + cc-connect 通道 + daily/messaging/dashboard |
 | 运行产物 | `logs/`、`../.dsh-bot/` | trace / audit / tasks / edc；dsh 独立 DSH_HOME（会话、profile），勿手工编辑 |
@@ -130,9 +130,8 @@ dsh 侧技能目录决定路由；cc_connect 侧仍以 `[use skill: {name}]` 前
 注意 `.claude/skills/` 是启动时复制同步的生成物，源头只在 `bot/skills/`；已存活的 Claude Code 会话要重启 cc-connect daemon 才能感知。
 例外：`bot/skills/digital-oracle/` 是自包含引擎包（数字先知），digital-oracle-agent
 Handler 进程内调用，frontmatter enabled:false 防合成 Agent 抢路由。
-工单引擎已于 webportal-agent v3.0.0 迁出（去 vendor）：bot/skills/order-sql 已删除，
-能力由独立仓库 webportal-order-agent 以 A2A 服务承载（`python -m order_agent.a2a_server`，
-127.0.0.1:8080），feishu-agent-platform 内只留 A2A 客户端 Handler（webportal_handler.py）。
+外部能力可以独立仓库承载：MCP 投影走 `[projects.mcp.<name>]`，A2A 投影留一个
+协议壳 Handler，判定逻辑全部在对端，本仓不重复实现。
 
 **3. 改提示词**
 - **消息路由/行为规则**改 `bot/prompts/router/dsh_routing_rules.md`（dsh 系统提示词单源，
@@ -197,6 +196,6 @@ Handler 进程内调用，frontmatter enabled:false 防合成 Agent 抢路由。
 
 ## 平台注意
 
-- Windows 环境：main.py 已强制 stdout UTF-8；start-bot.bat 先清理 nacos-mcp 孤儿进程
+- Windows 环境：main.py 已强制 stdout UTF-8；start-bot.bat 先清理残留的 MCP 孤儿进程
 - MCP 孤儿清理：app/main.py 启动时 reap + 120s watcher
-- git 禁止提交：`.env`、`logs/`、`bot/tokens/`、工单/
+- git 禁止提交：`.env`、`logs/`、`bot/tokens/`

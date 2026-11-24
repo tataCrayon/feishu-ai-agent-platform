@@ -37,10 +37,7 @@ changelog:
 
 ## 示例
 
-用户：'看看 rwa-agent 最近发布的版本，再看看对应的数据库有没有变更'
-输出：{"tasks": [{"agent": "webportal-agent", "query": "解析这个审批链接并生成变更 SQL", "depends_on": -1}, {"agent": "aihot", "query": "今天的 AI 动态", "depends_on": -1}]}
-
-用户：'今天有什么技术动态，再看看 hub-platform 的配置有没有更新'
+用户：'看看今天的技术动态，再看看今年美国衰退的概率'
 输出：{"tasks": [{"agent": "aihot", "query": "今天的技术动态", "depends_on": -1}, {"agent": "digital-oracle-agent", "query": "今年美国衰退的概率", "depends_on": -1}]}
 
 ## 注意事项

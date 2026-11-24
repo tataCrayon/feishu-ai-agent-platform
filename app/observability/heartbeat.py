@@ -99,7 +99,7 @@ def step_token_stats() -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
-# Step 2: lark-cli 登录态（easyprd / 案例镜像全部依赖它）
+# Step 2: lark-cli 登录态（文档读写、纪要导入等 user 身份能力依赖它）
 # ══════════════════════════════════════════════════════════════
 
 # refresh token 有效期内，随便一次 lark-cli 调用都会自动续期；超过这个天数
@@ -111,7 +111,7 @@ _LARK_TOKEN_WARN_HOURS = 2
 def step_lark_auth() -> dict:
     """查 lark-cli 登录态：user token 是否将过期、refresh 是否将失效。
 
-    为什么要在心跳里查：所有 PRD 读写、妙记、案例镜像都走 `--as user`，
+    为什么要在心跳里查：文档读写、妙记导入都走 `--as user`，
     token 过期后失败形态是 `invalid token`（不是缺 scope），
     看起来像代码问题。整周没人跑 lark-cli 时 refresh token 也会失效，
     那才需要人工重新扫码——提前一周知道，比当天排查省事。
@@ -162,7 +162,7 @@ def step_lark_auth() -> dict:
             problems.append(
                 f"refresh token 仅剩 {days:.1f} 天 → 跑一次任意 lark-cli 命令即可续期")
     if not user.get("scope"):
-        problems.append("user 未登录 → PRD 读写/妙记/案例镜像全部不可用")
+        problems.append("user 未登录 → 文档读写/妙记导入全部不可用")
     elif access is not None and (access - now).total_seconds() / 3600 < _LARK_TOKEN_WARN_HOURS \
             and str(user.get("tokenStatus")) != "needs_refresh":
         # 正常情况会自动续期，列出来只是让"刚过期那一小时"有据可查

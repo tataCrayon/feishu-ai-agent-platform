@@ -128,7 +128,7 @@
       "id": "handlers",
       "type": "backend",
       "label": "Handler 能力执行",
-      "sublabel": "数字先知 · CMDB · 定时 · 工单",
+      "sublabel": "数字先知 · 定时任务 · Skill 目录",
       "pos": [
         740,
         486
@@ -142,7 +142,7 @@
       "id": "bypass",
       "type": "backend",
       "label": "旁路服务",
-      "sublabel": "CMDB 提醒 · PRD 监听 · 调度",
+      "sublabel": "旁路监听 · 状态面板",
       "pos": [
         400,
         486
@@ -150,20 +150,6 @@
       "size": [
         210,
         80
-      ]
-    },
-    {
-      "id": "a2a",
-      "type": "external",
-      "label": "工单 A2A 服务",
-      "sublabel": "webportal-order-agent :8080",
-      "pos": [
-        740,
-        660
-      ],
-      "size": [
-        210,
-        76
       ]
     },
     {
@@ -287,15 +273,6 @@
       ]
     },
     {
-      "from": "handlers",
-      "to": "a2a",
-      "label": "message:send",
-      "labelAt": [
-        880,
-        630
-      ]
-    },
-    {
       "from": "aggregator",
       "to": "bypass",
       "label": "非@消息截流",
@@ -330,7 +307,6 @@
       "dot": "amber",
       "title": "旁路不抢路由",
       "items": [
-        "CMDB 提醒 / PRD 监听 / 定时调度在 main.py 旁路运行，不进消息路由",
         "授权群的非 @ 消息只进监听窗口，避免把同事闲聊送去作答",
         "审批门照旧：定时任务创建必发 L2 卡片，订阅只绑发送者本人"
       ]
