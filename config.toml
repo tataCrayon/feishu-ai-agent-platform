@@ -1,0 +1,674 @@
+clddata_dir = ""
+attachment_send = ""
+language = "zh"
+shell = "bash"
+max_attachment_size_mb = 0
+
+# Provider 已通过 cc-connect provider import 从 cc-switch 导入
+# 已导入：fai-wzg, fai, fai-whx（均指向 aigw.example.com/v1）
+# 在飞书聊天中用 /provider switch <name> 切换
+
+[[projects]]
+  name = "dev-bot"
+  admin_from = "*"
+  inject_sender = true
+
+  # ── dsh 执行面 ──
+  # 模型与凭据都可配：api_key 留空则读环境变量 DSH_API_KEY（凭据只放 .env）。
+  # 模型必须在 deploy/dsh/<profile>/cordis.patch.yml 的对应 provider 下存在，
+  # 否则 dsh 报 unknown model option。
+  [projects.dsh]
+    enabled = true
+    profile = "agentbiz"
+    dsh_home = ""            # 空 = 仓库同级 .dsh-bot（与桌面版 DSH_HOME 隔离）
+    workspace = ""           # 空 = 仓库根
+    provider = "flp-self-oai"
+    model = "glm-5.3-flash"
+    api_key = ""             # 空 = 读 ${AIGW_API_KEY}
+    session_ttl_sec = 1800   # 会话空闲回收（秒）；超时关会话，下条消息开新会话
+
+  # ── MemoryCore Gateway 配置 ──
+  # LLM 三要素不在本文件：bot 启动时把 .env 的 LLM_MODEL/LLM_BASE_URL/LLM_API_KEY
+  # 以 TDAI_LLM_* 注入子进程（MemoryCore 的 yaml 只留 ${VAR} 占位符），
+  # 与主编排器同模型同网关。
+  # MCP 工具面：feishu / domains / capabilities / order_agent 四个 stdio server。
+  # capabilities = 进程内 Handler 的工具投影（数字先知、CMDB 提醒、定时任务、
+  # 工单、Skill 目录）。它不挂，能力就只剩描述、没有执行入口——实测模型会回答
+  # 「本会话没有这个执行入口」。feishu / domains / capabilities 三个都按默认启用，
+  # 下面的小表只在需要覆盖 command/args/timeout 时写。
+  # order_agent 起不来时置 false，而不是挂一个必然失败的子进程：
+  # dsh 对 MCP 启动失败的处理是 session/new 直接拒绝，整轮会话建不起来
+  # （表现是「bot 不回话」而不是「工单能力不可用」）。
+  # 2026-11-06 已修（对方仓 mcp_server 迁到 mcp 2.x 的 MCPServer），实测 9 个
+  # 工具可 list/call，故置 true。依赖仍是「对方仓 .venv 的 mcp 版本与代码匹配」：
+  # 本仓 client 侧是 1.26，与 2.3 server 握手正常（stdio 协议未变）。
+  [projects.mcp]
+
+    [projects.mcp.order_agent]
+      enabled = true
+      command = "${ORDER_AGENT_PYTHON}"   # 例 "python" 或对方仓 .venv 的绝对路径
+      args = ["-m", "order_agent.mcp_server"]
+      cwd = "${ORDER_AGENT_HOME}"        # 对方仓工作目录
+      timeout_sec = 600
+
+    # Figma 设计稿 MCP（官方 figma-developer-mcp，stdio 模式）——给 PRD↔UI 对账用。
+    # 为什么不走 easyprd 自己的 REST 调用：组织账号的 /v1/files 配额很低
+    # （实测 Retry-After 9000+ 秒），而 MCP 这边走的是同一把 token 的
+    # /v1/files/{key}/nodes 端点，配额同样受限——所以两条路都受配额约束，
+    # 差别只在于 MCP 的工具描述更准确、能按画板粒度拉取。
+    # command 必须是 node 的绝对路径（Windows 下 npm 包只有 .cmd 壳，
+    # dsh 子进程不经过 shell，直接 exec 会 FileNotFoundError）。
+    [projects.mcp.figma]
+      enabled = true
+      command = "${NODE_BIN}"            # node 绝对路径（Windows 下 npm 只有 .cmd 壳）
+      args = [
+        "${FIGMA_MCP_BIN}",              # figma-developer-mcp/dist/bin.js 绝对路径
+        "--stdio", "--no-telemetry", "--format", "tree",
+        "--proxy", "none",   # 直连：本机到 api.figma.com 通，走代理反而超时
+      ]
+      timeout_sec = 120
+      # token 只从 .env 走环境变量注入：写进 args 会出现在进程列表与日志里
+      [projects.mcp.figma.env]
+        FIGMA_API_KEY = "${FIGMA_API_KEY}"
+
+  [projects.memory]
+    enabled = true
+    base_url = "http://127.0.0.1:8420"
+    api_key = ""
+    service_id = "feishu-bot"
+    timeout_sec = 10
+    # 网关 v1 /recall 只消费 query+session_key（无条数/策略参数可下发，
+    # 2026-09-19 核对 MemoryCore server.ts）；只留本侧真正生效的截断闸
+    recall_context_max_chars = 2000
+
+    # 进程托管：随 bot 启动拉起、随 bot 关停整树回收
+    [projects.memory.lifecycle]
+      enabled = true
+      core_dir = "~/IdeaProjects/tdai-agent-memory/MemoryCore"
+      manage_process = true   # false = 只做健康检查，不拉起/不回收
+
+  # ── WebPortal-pilot 工单系统配置 ──
+  # ── WebPortal 工单 API（遗留：工单状态查询；工单→SQL 主能力已由
+  #    order-sql 引擎在进程内承载，不再依赖外部 Pipeline API）──
+  [projects.webportal]
+    enabled = false
+    base_url = "http://127.0.0.1:8000"
+    timeout_sec = 15
+
+  # ── cc-connect 桥接配置 ──
+  [projects.cc_connect]
+    enabled = true
+    webhook_url = "http://127.0.0.1:9111/hook"
+    webhook_token = ""  # 从 .env 的 CC_WEBHOOK_TOKEN 读取
+    default_project = "dev-bot"
+    timeout_sec = 120
+    max_sessions = 2    # Claude Code 会话并发上限（send_and_wait 占额度，超限排队；会话复用由 session_key resume 保证）
+
+  [projects.agent]
+    type = "claudecode"
+
+    [projects.agent.options]
+      append_system_prompt = """
+你是中台核心组数字助手里的维护者通道（/dev）。群聊能力清单以 /help 为准，本段不维护第二份清单。
+
+## 秒回
+
+用户问你是谁、能做什么：用一句话说明这是维护者通道，群里的能力让对方直接说需求或发 /help。
+不要列举已下线的斜杠命令。数据库、发布、配置、工单、代码搜索都不走命令入口。
+
+## 角色前缀
+
+消息前若有 [role=xxx] 或 [use skill: xxx]，按该前缀执行，不要偏离。
+无前缀时做代码搜索、需求分析和仓库内排查。
+
+## 已下线，不要声称还能做
+
+数据库查询、Nacos 配置、CMDB 发布在 Bot 侧已强制下线。
+团队做法在 team-skills/skills 的 infra-ops-skills 分支：mysql-guard、nacos-guard、cmdb-assistant。
+
+## 记忆
+
+会话开始先读 bot/memories/SESSION_LAST.md（如有）。短期记忆在 bot/memories/SHORT_TERM.md。
+需要深度信息时搜 bot/memories/INDEX.md，再读对应文件。不确定先查代码，禁止编造。
+
+## 权限
+
+读 bot/todos/whitelist.json。不在列表中默认 L0。
+SQL 写入、CMDB 发布、Nacos 修改只对 L2，且必须先向用户确认。
+禁止 prod-k8s 自动发布。手机号、身份证、邮箱、银行卡自动脱敏。
+"""
+      mode = "bypassPermissions"
+      work_dir = "D:\\Users\\devuser\\IdeaProjects\\feishu-agent-platform"
+
+    [[projects.agent.providers]]
+      name = "fai-wzg"
+      api_key = ""  # 从 .env 的 LLM_API_KEY 读取（load_config 环境变量优先）
+      base_url = "https://aigw.example.com/v1"
+
+      [projects.agent.providers.env]
+        ANTHROPIC_DEFAULT_FABLE_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_FABLE_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_OPUS_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_SONNET_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_SONNET_MODEL_NAME = "deepseek-flash"
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+        CLAUDE_CODE_SUBAGENT_MODEL = "deepseek-flash"
+
+    [[projects.agent.providers]]
+      name = "fai"
+      api_key = ""  # 从 .env 的 LLM_API_KEY 读取（load_config 环境变量优先）
+      base_url = "https://aigw.example.com/v1"
+      model = "deepseek-flash"
+
+    [[projects.agent.providers]]
+      name = "fai-whx"
+      api_key = ""  # 铁律：统一用 .env 的 LLM_API_KEY（sk-s5nsp…），禁止其他 key
+      base_url = "https://aigw.example.com/v1"
+
+      [projects.agent.providers.env]
+        ANTHROPIC_DEFAULT_FABLE_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_FABLE_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_OPUS_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = "deepseek-flash"
+        ANTHROPIC_DEFAULT_SONNET_MODEL = "deepseek-flash"
+        ANTHROPIC_DEFAULT_SONNET_MODEL_NAME = "deepseek-flash"
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+        CLAUDE_CODE_SUBAGENT_MODEL = "deepseek-flash"
+
+  [[projects.platforms]]
+    type = "feishu"
+
+    [projects.platforms.options]
+      app_id = "cli_example00000000"
+      app_secret = ""  # 凭据不入库：从 .env 的 FEISHU_APP_SECRET 读取（load_config 兜底 os.getenv）
+      done_emoji = "none"
+      enable_feishu_card = true
+      progress_style = "card"
+      reaction_emoji = "OnIt"
+
+  # 注：cc-connect 原生的 [projects.heartbeat] / [projects.auto_compress] 已从本文件移除。
+  # 本仓进程从不读它们（`app/config.py` 曾映射成两个无消费方的字段，2026-11-06 一并删掉）；
+  # 留在这里只会让人以为「改它能让 bot 保活 / 自动压缩」。会话保活由 dsh 的
+  # session_ttl_sec 与 DshSupervisor 负责，压缩在 dsh 内核里做。
+
+  # 日报**订阅推送**（群里的定时推送），不是路由能力：daily-agent 已下线，
+  # 资讯类问答统一由 aihot 承接；这里保留的是「到点把日报推到订阅群」的调度。
+  [projects.daily_report]
+    enabled = true
+    cache_dir = "logs/daily"
+    check_interval_sec = 60
+    max_push_length = 3000
+
+  # ── 消息聚合（debounce 合并连发消息）+ 回执 ──
+  [projects.messaging]
+    enabled = true
+    debounce_sec = 1.0        # 静默窗口：首条消息后等 1s 无新消息即处理（3s 偏慢）
+    max_wait_sec = 15.0
+    # 收到即回执：合并后立刻回复"已接收N条消息，正在处理/排队中"，覆盖全程静默期
+    ack_receipt = true
+    # 路由后去向回执："正在交给 XX 处理…"；2026-09-15 默认关闭——去向信息改为
+    # 最终回复尾注（gather 节点拼接），少一条打断消息
+    routed_receipt = false
+    # 答复后追加 👍/👎 反馈卡：点 👎 即回填该轮轨迹的 feedback 字段，
+    # 让「哪轮答得不好」从「等人来吐槽」变成可统计的信号。
+    # 每轮多一条极简卡片；嫌吵设 false 即退回纯文本。
+    feedback_buttons = true
+
+  [projects.router]
+    enabled = true
+    # 模型三要素（model/base_url/api_key）单源在 .env（LLM_MODEL/LLM_BASE_URL/LLM_API_KEY）
+    temperature = 0.0
+    # 采样参数基线（对所有 LLM 调用点生效；缺省/None = 不传该参数，走服务端默认）
+    # max_tokens = 4096      # 补全上限（tokens）
+    # top_p = 1.0            # 核采样
+    # 路由 read 超时（单次请求语义）。2026-09-24 实测 p95=38.6s、网关抖动时
+    # 单次逼近 60s——60s 会在重试可自愈的场景提前掐断；放宽到 90s 给足余量。
+    # 注意最坏总时长 = (timeout_sec × 重试次数)，与 max_retries 联动评估。
+    timeout_sec = 90
+    max_retries = 4         # SDK 层网络/限流重试（对 router/direct/decompose/handler 生效）；
+                            # 2026-09-16 防火墙对网关 TLS 握手间歇丢包（约 2/3 概率），4 次重试穿透率 >99%
+    fallback_on_error = true
+    history_enabled = true
+    history_max_turns = 6
+    history_persist = true    # 会话历史落盘 logs/history/，重启后回填（对话不丢）
+    # 每会话 tool-call 限流（10 分钟内最多 50 次工具调用，防滥用）
+    tool_rate_limit = 50
+    tool_rate_window_sec = 600
+    # 站点级采样覆盖（可选项：router/decompose/direct/handler）
+    # 未写的站点继承上方基线；decompose 温度缺省 0.1（原行为）
+    # [projects.router.llm_sites.decompose]
+    #   temperature = 0.1
+    #   max_tokens = 1024
+    # [projects.router.llm_sites.handler]
+    #   temperature = 0.2
+
+  [projects.dashboard]
+    enabled = true
+    port = 9112
+    host = "0.0.0.0"
+
+  # ── PM 工作台绑定（能力层 app/domains/pm/ 的身份与表位置）──
+  # 这一段必须挂在 [[projects]] 下：写成顶层 [pm] 会静默读到默认值。
+  # 凭据不进本文件：与飞书交互一律走 user token（lark-cli 登录态）+ tenant token，
+  # 不在这里放 app_secret。换人 / 换表只改这里，不改 .py。
+  [projects.pm]
+    enabled = true            # true 才会挂 /api/pm/* 与启动 pm_daemon
+    # 不想手改这里的话：在飞书里发 `/pm 帮助` 看指引、`/pm 检查` 逐项自检。
+    # 自检只读不写——这个文件里有注释，机器回写会把它们吃掉。
+    #
+    # ⚠️ 身份口径：open_id 是「推送发给谁」，lark-cli 登录态是「读谁的会话」。
+    # 两者必须指向同一个人，否则会「推给 A、读 B 的会话」——两边都像在跑，
+    # 但推出来的东西跟读到的数据对不上。当前本机 lark-cli 登录的是张三；
+    # 李四要用这套，得在他本人机器上 `lark-cli auth login` 后把 open_id 换过去。
+
+    [projects.pm.identity]
+      open_id = "ou_pm000000000000000000000000000"   # 李四
+      names = ["李四", "李四"]
+
+    [projects.pm.outputs]
+      spreadsheet_token = "shtcnExampleToken0000000000" # 版本排期电子表格
+      sheet_id_versions = "sht000"                      # 产品线版本计划
+      sheet_id_weekly = "sht001"                        # 每周计划跟踪
+      base_token = "bascnExampleToken0000000000"        # 日计划多维表格
+      table_id = "tblExampleTable001"
+
+    [projects.pm.push]
+      group_id = ""           # 空 = 只发私聊（PMO 群里有第三人，先不往里推）
+      morning = "09:00"
+      evening = "17:30"
+
+    [projects.pm.rules]
+      stale_days = 3          # 挂几天算超期
+      snooze_days = 3         # 延后默认几天
+      scan_mode = "all"
+
+      [projects.pm.rules.release]
+        release_weekday = 4   # 发版日：周一=1 … 周四=4
+        ask_days_before = [8] # 提前 8 天 = 上周三；要周二+周三写 [8, 9]
+
+  # ── 能力热插拔（管理员审批接入新 Skill/Agent/MCP）──
+  # 不变量见：docs/features/capability-hotplug.md
+  [projects.capability]
+    enabled = true            # false 时文件消息分流完全关闭
+    approver_min_level = 2    # 提交与审批都须 L2 管理员（D1）
+    max_pkg_mb = 2            # 能力包体积上限
+
+  # ── 运行时护栏（全局并发上限 + 有界排队 + 任务持久化）──
+  # 防高并发压垮本地服务器：cc-connect 通道每任务 fork 一个 Claude Code
+  # 子进程，是并发预算的主要消耗方；handler/direct 类任务开销很小。
+  # 超出并发的任务排队，队满/等待超时直接回复"系统繁忙"
+  # （快速失败优于无界堆积）。任务生命周期落盘（running/finished/
+  # interrupted），重启后扫描 interrupted 主动告知用户。
+  [projects.runtime_guard]
+    enabled = true            # false = 旧版行为（无并发闸、无持久化）
+    max_concurrent = 6        # 全局同时执行编排的任务数上限（含排队中的探测）
+    max_queue = 20            # 等待队列长度上限（队满快速失败）
+    queue_timeout_sec = 120.0 # 排队最长等待秒数（超时回复"系统繁忙"）
+    persist_enabled = true    # 任务生命周期落盘（logs/runtime_tasks/）
+    persist_dir = "logs/runtime_tasks"
+    notify_interrupted = true # 启动时把上次中断的任务飞书告知用户
+
+  # ── 工单案例库飞书镜像（案例沉淀后自动同步的写目标）──
+  # 对话「沉淀案例 <CMDB工单号>」/「沉淀案例 飞书 <文档链接>」落本地 draft 案例后，
+  # 把同一案例镜像到飞书案例库：parent_node_token 下建子文档 + 改 index_doc_token
+  # 目录索引，回读校验一致才算完成。三个 token 是案例库坐标（与 webportal-order-agent
+  # 仓 case-ingest SKILL 步骤 8 一致），换库只改这里。写入只允许这两个目标，
+  # 严禁把 user 写权限开到其他文档。
+  [projects.case_mirror]
+    enabled = true
+    space_id = "7529731674094059523"          # 案例库 wiki 空间
+    parent_node_token = "wikcnExampleToken0000000001"   # 案例子文档父节点（目录）
+    index_doc_token = "doxcnExampleToken0000000000"     # 目录索引文档
+    wiki_base_url = "https://example.feishu.cn/wiki"
+
+  # ── 定时任务调度（创建→评估→到点执行→发消息；评估通过即生效，无审批门）──
+  # 创建走 schedule-agent；超出能力面（承接 Agent 不在清单/目标非会话 ID/
+  # 间隔 <10 分钟）在评估阶段驳回。扫描间隔下限 10 分钟是需求红线，
+  # scan_interval_sec 调低于 600 会被强制拉回。
+  [projects.scheduled_tasks]
+    enabled = true            # false = 创建入口与调度循环都关闭
+    scan_interval_sec = 600   # 扫描间隔（秒），下限 600（10 分钟）
+
+  # ── 分支合并检查（外部 merge-check 服务，GitLab 分支对比 API 封装）──
+  # 执行走 merge-check-agent（handler）；项目清单在服务端 config/settings/app.yaml 维护。
+  # 全量检查约 30s，超时给足 120s；内网服务直连（trust_env=False，勿走系统代理）。
+  [projects.merge_check]
+    enabled = true
+    base_url = "http://127.0.0.1:8080"
+    timeout_sec = 120.0
+
+  # ── 团队 Skill 目录（team-skills/skills，按分支读 description）──
+  # 查询读 logs/skill_catalog/snapshot.json，不在每次提问时 fetch。
+  # 快照超过 refresh_interval_hours 才后台刷新；飞书说「刷新 Skill 目录」强制刷新。
+  # skip_branches 是试验分支和已被覆盖的早期包，回复末尾会标明跳过了谁。
+  [projects.skill_catalog]
+    enabled = true
+    repo_url = "http://git.example.com/team-skills/skills.git"
+    bare_dir = "logs/skill_catalog/repo.git"
+    snapshot_path = "logs/skill_catalog/snapshot.json"
+    refresh_interval_hours = 24
+    fetch_timeout_sec = 120
+    skip_branches = ["addNewSkill", "addNewSkill_v1", "addNewSkill_v2", "merge_all", "init"]
+
+  # ── easyprd：PRD 变更监听（群讨论/妙记 → 变更点 → PRD 评论 → 决策闭环）──
+  # 格式契约与不变量见 docs/features/easyprd-prd-watch.md。默认关闭 + dry_run：
+  # 先把识别误报率看清楚，再决定真写评论。
+  # watch_chats 是「放开非@消息监听」的唯一依据——不在名单里的群行为完全不变。
+  # 台账三坐标留空即不启动台账（不猜默认值，写错地方比不写更糟）。
+  #
+  # 2026-11-23 开启：**不配群**。约定改成「在哪聊就在哪答，讨论可以转发进来」，
+  # 所以不放开任何群的非@监听（群聊隐私与 message 量都不受这次改动影响）。
+  # 旁路循环不再有来源时（无群/无会议映射/无自动扫描）会起一个空转守卫，
+  # 保证手动入口（prd_watch_status / analyze_story / analyze_requirement /
+  # ingest_meeting / review_prd_ui）可用——这几个工具要的是 Story ID 或链接，
+  # 不需要群绑定。watch_chats 里一旦填了群，守卫自动退出、交回监听循环。
+  [projects.prd_watch]
+    enabled = true
+    watch_chats = []
+    window_sec = 300.0            # 讨论攒窗口：一次讨论出一张卡片
+    extract_min_confidence = 0.70 # 低于此丢弃并计数
+    extract_flag_confidence = 0.85 # 介于两值之间 → 评论标「⚠️ AI 自动识别」
+    poll_replies_sec = 120        # 产品回复「采纳/忽略/调整」的轮询间隔
+    decision_ttl_days = 3         # pending 超时提醒一次
+    dry_run = true                # 只识别落日志，不写评论不发卡片
+    comment_identity = "bot"      # 评论读写身份：实测 user 缺 comment scope；切 user 需先补授权
+    # ── 绑定事实源：飞书项目（Meegle）──
+    # Story 标题/状态/PRD 链接（「需求文档」字段）/参与人 全从 Meegle 读，
+    # 多维表格退为变更记录落库。凭证只放 .env 的 MEEGLE_USER_TOKEN（个人 m- token，
+    # 等于持有人在该空间的全部读权限），**禁止写进本文件**。
+    meegle_simple_name = "examplecorp"  # 飞书项目空间名；空 = 不接 Meegle，绑定走台账
+    prd_field = "field_c56ee5"    # Story 上「需求文档」字段 key（换空间时改这里）
+    task_doc_field = "wiki"       # Story 上「任务文档」字段 key
+    ledger_base_token = ""        # 旧台账（群↔Story↔PRD 绑定 + 变更记录）
+    ledger_change_table = ""
+    ledger_bind_table = ""
+    minutes_identity = "user"     # 读妙记身份；bot 实测未被 scope 挡，user 取决于登录态
+    minutes_poll_sec = 1800       # 妙记轮询（生成事件是 user 身份，bot 长连接收不到）
+    # 卡片「变更依据」的来源链接前缀。留空 = 卡片只写来源文字、不给链接。
+    # 为什么不在代码里猜：租户域名是私有信息，拼错出来的链接在卡片上看不出异常，
+    # 点了打不开——比没有链接更糟。实测妙记形如 https://<租户>.feishu.cn/minutes/<token>
+    minutes_base_url = ""         # 例 "https://example.feishu.cn/minutes"
+    notes_base_url = ""           # 智能纪要 docx 前缀，例 "https://example.feishu.cn/docx"
+
+    # ── CR 台账（本能力自建，需在 base 里新建「PRD变更建议CR」表）──
+    # 与需求知识台账的「变更记录」表分开：那是时序归档，这是待办状态机。
+    # 坐标为空的后果：评论照写，但决策状态只在内存里，重启即丢（状态面板会明说）。
+    cr_base_token = ""            # 填需求知识台账同一个 base 也行（表必须在里面）
+    cr_table = ""                 # 例 "tblXXXXXXXX"
+
+    # ── 需求知识台账（req-knowledge-ledger 内化）──
+    # 三张表：需求台账 / 会议纪要 / 变更记录。表 id 留空取 examplecorp 空间默认值。
+    kb_base_token = ""            # 例 "wikcnExampleToken0000000002"
+
+    # ── 本地台账（2026-11-23 起默认开，三张表落本机 SQLite）──
+    # 绑定 / CR 状态机 / 需求知识地图是 bot 自己的运行状态，不是给人协同编辑的表格。
+    # 放本地：零配置、零凭证、不走网络；上面那些 base_token / cr_* / ledger_* 即使
+    # 填了也不会被读（避免同一件事两个事实源）。路径留空 = logs/prd_watch/ledger.db。
+    # 换机器时搬这个文件即可；要看内容用 `ledger_dump` 工具，别直接改库。
+    local_ledger = true
+    local_ledger_path = ""
+    kb_story_table = ""           # 默认 tblZkrb5oetJKC9G
+    kb_meeting_table = ""         # 默认 tbl393iJIflX44ll
+    kb_change_table = ""          # 默认 tblXldbvV1Htbx3N
+
+    # ── PRD ↔ UI 设计稿对账（第一期只做文本层）──
+    # token 只放 .env 的 FIGMA_API_KEY（与 mcp-gateway 的 figma backend 同源）。
+    figma_token = ""
+
+    # ── 会议自动扫描（按需求名核心词搜妙记）──
+    # 默认关：关掉时只支持「贴一条妙记/纪要链接给 bot」。
+    meeting_auto = false
+    meeting_scan_sec = 3600       # 扫描节拍（会议量远小于群消息，一小时一次足够）
+    meeting_scan_days = 7         # 只搜最近 N 天生成的妙记
+    meeting_scan_limit = 5        # 每轮最多整理几场（每场一次模型调用）
+
+    # 子表必须放在本节所有标量键之后（TOML 规则：一旦开子表，后面的键就属于子表）。
+    # Meegle 没有「需求对应哪个群」这一项（Story 上只有拉群方式配置，没有 chat_id），
+    # 靠群名模糊匹配 = 可能把建议写到别人的 PRD 上，所以必须由管理员逐个显式绑定。
+    [projects.prd_watch.story_chat_map]     # 形如 "7154141591" = "oc_xxxxx"
+    # minute_token = "StoryID"。显式映射，不做自动发现：靠会议标题猜需求是禁止的
+    # 猜测行为（且 minutes +search 还需 scope minutes:minutes.search:read，实测缺失）。
+    [projects.prd_watch.minutes_story_map]
+
+  # ── CMDB 工单提醒（cmdb-order-tracker 能力内化）──
+  # 轮询 CMDB **生产与 UAT 两套**工单，工单里出现**订阅者本人创建**的任务（SQL/
+  # 发布/NACOS/定时任务）时，按事件发飞书卡片到订阅者私聊：新工单 / 开始执行 /
+  # 执行完成或失败。UAT 卡片标题带「· UAT」后缀、链接指向 UatOrderDetail。
+  # 订阅自助：任何人在群里 @bot 说「订阅 CMDB 工单提醒 <自己的 CMDB 用户名>」即可，
+  # 不再在配置里写死名单（订阅者存 logs/cmdb_watch/state.json，gitignore）。
+  # 只读，不触发任何执行动作。
+  # 列表接口（TotalOrderApi / UatTotalOrderApi ?action=tree）需要 sessionid，
+  # 读接口 data/detail 免 session；没有 session 时退回 order_id 顺序探测。
+  # ⚠ 两套 order_id 是**独立自增序列**：UAT 1924 与生产 1924 是两张无关的单。
+  [projects.cmdb_watch]
+    enabled = true
+    base_url = "http://cmdb.example.com"   # 卡片「查看工单」链接也用它
+    interval_sec = 120            # 轮询间隔（下限 60）：已跟踪工单每轮只拉轻量状态码
+    refresh_sec = 900             # 全量校准周期：每 15 分钟把跟踪中的工单重读一遍
+                                  # （补齐 SQL/NACOS 状态与任务增删；平时不拉 html_content）
+    scan_limit = 30               # 每轮最多拉多少张工单状态
+    probe_span = 30               # 无 session 时按 id 探测的跨度（0 = 只用工单列表）
+    probe_step = 3                # 列表接口可用时的探测宽度（id 已对齐最新，只需看最近几张）
+    initial_scan = 10             # 首次启动回溯多少张历史工单（0 = 只看今后）
+    # session_id 留空 → 读 .env 的 CMDB_SESSION_ID 或 ~/.cmdb-session
+    # 后台不自动登录（CMDB_ALLOW_RELOGIN 默认 confirm）：CMDB 是单会话登录，
+    # 用本人账号（~/.cmdb.conf）一登就把浏览器会话顶掉。失效时降级为 id 探测，
+    # 只是新工单发现晚一轮。要真正保活得配独立服务账号 ~/.cmdb-bot.conf 再设 true。
+
+[[commands]]
+  name = "deploy"
+  description = "CMDB 发布管理 / Deploy management"
+  prompt = """
+接收子命令: status/history/run。
+- status {{1*}}: 查应用最新发布状态。L1+可用。
+- history {{1*}}: 查应用最近5次发布记录。L1+可用。
+- run {{1*}} {{2}}: 触发构建发布（参数：应用名 环境 分支）。仅 L2管理员可用，禁止prod-k8s环境自动发布，需确认环境+分支后执行。执行后追加审计日志到 `logs/audit/`。
+当前请求: /deploy {{0}}
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "config"
+  description = "Nacos 配置管理 / Config management"
+  prompt = """
+接收子命令: get/search/update。
+- get {{1*}}: 查询指定 DataId 配置。L1+可用。
+- search {{1*}}: 搜索 DataId 关键词。L1+可用。
+- update {{1*}} {{2*}}: 修改配置（DataId + JSON内容）。仅 L2管理员可用，修改前必须先展示当前值+diff预览，用户确认后执行。执行后追加审计日志到 `logs/audit/`。
+当前请求: /config {{0}}
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "whitelist"
+  description = "平台白名单管理 / Whitelist management"
+  prompt = """
+仅 L2管理员可用。子命令: add/list。
+- add {{1*}}: 添加用户到白名单（@用户名）。确认用户身份后调用 `python app/guardrails/security_guard.py whitelist add --admin {sender_id} --user {open_id} --name {name} --level 1`
+- list: 列出所有白名单用户。
+当前请求: /whitelist {{0}}
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "help"
+  description = "查看能力列表 / Show capabilities"
+  prompt = """
+根据 sender_id 权限级别展示可用能力（读 `bot/todos/whitelist.json`）。
+
+格式要求：简洁列表，≤300字，按权限级别展示。开头打招呼，结尾「直接问我就行～」。
+
+**L0 游客** 看到：
+📖 查知识资产 — 直接问 RWA 业务问题
+🗄️ `/db <SQL>` — 查数据库（限 SELECT 20 行）
+🔍 `/findcode <关键词>` — 搜代码
+📋 飞书操作 — 查文档/发消息/日程等（lark-* 能力）
+📝 `/doc <内容>` — 写飞书文档
+
+**L1 授权用户** 额外看到：
+🚀 `/deploy status|history <应用>` — 看发布状态/历史
+⚙️ `/config get|search <关键词>` — 查 Nacos 配置
+
+**L2 管理员** 额外看到：
+🚀 `/deploy run <应用> <环境> <分支>` — 触发发布
+⚙️ `/config update <DataId> <内容>` — 修改 Nacos 配置
+👤 `/whitelist add|list` — 管理白名单
+
+**所有用户** 额外看到：
+🤖 `/ai <主题>` — 查询 AI 咨询知识库（Claude Code/AI 提效经验）
+📡 `/ai-list` — 查看已订阅的 AI 内容
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "ai"
+  description = "AI 咨询查询 / AI consulting"
+  prompt = """
+查询 AI 咨询知识库。用 `python app/domains/ai_consultant/ai_consultant.py query "{{1*}}"` 检索 `.notes/ai-consulting/`。
+严格按序执行，禁止凭训练数据硬答：
+1. 先 query 检索知识库 → 有命中 → 简洁列表展示标题+摘要+文件路径。
+2. query 未命中 → 立即 `python app/domains/ai_consultant/ai_consultant.py search "{{1*}}" --limit 5` 实时搜索 → 展示最新结果标题+URL+摘要。
+3. 实时搜索也失败/为时效性问题 → 用 firecrawl 或 WebSearch 实时搜，明确标注检索时间。
+4. 若用户想沉淀某条 → `python app/domains/ai_consultant/ai_consultant.py digest <url> --topic "{{1*}}"` 抓取+沉淀。
+绝不允许：标注「截至某年」或「基于当前知识」却无实时检索依据。
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "ai-track"
+  description = "订阅 AI 内容追踪 / Subscribe AI tracking"
+  prompt = """
+新增 AI 咨询订阅。主题：{{1*}}。
+调用 `python app/domains/ai_consultant/ai_campaign.py add --name "{{1*}}" --keywords "{{1*}}" --interval 7 —subscriber {sender_id}`。
+回复确认订阅成功，说明下次自动采集时间。
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "ai-scan"
+  description = "手动搜索抓取 AI 内容 / Manually scan AI content"
+  prompt = """
+手动搜索并抓取 AI 内容。主题：{{1*}}。
+1. 先 `python app/domains/ai_consultant/ai_consultant.py search "{{1*}}" --limit 5`
+2. 展示搜索结果，让用户选择要深入阅读的 URL
+3. 用户确认后 `python app/domains/ai_consultant/ai_consultant.py digest <url> --topic "{{1*}}"` 抓取+沉淀
+"""
+  exec = ""
+  work_dir = ""
+
+[[commands]]
+  name = "ai-list"
+  description = "查看已订阅 AI 内容 / List AI subscriptions"
+  prompt = """
+查看当前 AI 咨询订阅。执行 `python app/domains/ai_consultant/ai_campaign.py list`。
+展示所有订阅：名称、关键词、下次检查日期、状态。
+"""
+  exec = ""
+  work_dir = ""
+
+[log]
+  level = "info"
+
+[speech]
+  enabled = false
+  provider = ""
+  language = ""
+
+  [speech.openai]
+    api_key = ""
+    base_url = ""
+    model = ""
+
+  [speech.groq]
+    api_key = ""
+    model = ""
+
+  [speech.qwen]
+    api_key = ""
+    base_url = ""
+    model = ""
+
+  [speech.gemini]
+    api_key = ""
+    model = ""
+
+[tts]
+  enabled = false
+  provider = ""
+  voice = ""
+  voice_id = ""
+  speed = 0.0
+  language_type = ""
+  tts_mode = ""
+  max_text_len = 0
+
+  [tts.openai]
+    api_key = ""
+    base_url = ""
+    model = ""
+
+  [tts.qwen]
+    api_key = ""
+    base_url = ""
+    model = ""
+
+  [tts.minimax]
+    api_key = ""
+    base_url = ""
+    model = ""
+    config_file = ""
+
+  [tts.mimo]
+    api_key = ""
+    base_url = ""
+    model = ""
+
+[display]
+  mode = "quiet"
+  thinking_messages = false
+  thinking_max_len = 0
+  tool_max_len = 0
+  tool_messages = false
+  history_max_len = 800
+  show_context_indicator = false
+  reply_footer = false
+
+[stream_preview]
+enabled = false
+
+[instant_reply]
+  enabled = false
+  content = ""
+
+[rate_limit]
+  max_messages = 20
+  window_secs = 60
+
+[cron]
+  session_mode = ""
+
+[webhook]
+  enabled = true
+  port = 9111
+  token = ""  # 从 .env 的 CC_WEBHOOK_TOKEN 读取
+  path = "/hook"
+
+[bridge]
+  port = 0
+
+[management]
+  port = 0
+
+# Agent: 技术日报 Agent
+# 技术动态日报查询、AI 行业动态、技术趋势信息

@@ -1,0 +1,1 @@
+"""Dashboard schemas — Pydantic DTOs for Agent dashboard API."""

@@ -1,0 +1,591 @@
+# feishu-agent-platform 专用 dsh profile 补丁层（profile=agentbiz）。
+#
+# 用法：由 app/dsh/supervisor.py 以 `--patch <本文件>` 叠加，不复制进 DSH_HOME。
+# 引擎与网关段移植自 acp profile（aigw 网关）。默认路由用 flp-self-oai（openai-completions）：
+# flf-whx（anthropic-messages）的 key 只从 .credentials.yaml 读、不吃进程 env，
+# bot 独立 DSH_HOME 下拿不到；见 README「凭据实测结论」。
+#
+# 与 acp profile 的差异见文末两段：skill-filesystem（关默认技能根）与 acp（默认路由）。
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      flp-self-oai:
+        displayName: flp-self-oai
+        # 凭据从进程 env 读；supervisor 按 config.toml [projects.dsh].api_key
+        # （或 DSH_API_KEY）注入，所以这里不绑定某个固定变量名。
+        apiKeyEnv: AIGW_API_KEY
+        api: openai-completions
+        baseURL: https://aigw.example.com/v1
+        models:
+          # 默认模型：最便宜的一档，日常路由与轻任务用它
+          #
+          # input 必须显式声明的理由：dsh 的 ACP 桥在 initialize 时用
+          # `resolveModelInfo().inputModalities` 决定是否广告 `promptCapabilities.image`，
+          # 而 pi-ai 的 openai-completions 路由**不会**从网关探测模态，只读这里的声明。
+          # 不写 image 的表现是会话里发图被拒（"inline image prompts were not
+          # advertised by this connection"），而不是模型看不懂图。
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+            input:
+              - text
+              - image
+          - id: deepseek-v4.1-flash-1017
+            name: deepseek-v4.1-flash-1017
+            contextWindow: 1000000
+            maxTokens: 256000
+            input:
+              - text
+              - image
+            reasoningEfforts:
+              off: null
+              low: low
+              medium: medium
+              high: high
+      flp-self:
+        apiKeyEnv: AIGW_API_KEY
+        api: anthropic-messages
+        baseURL: https://aigw.example.com
+        models:
+          - id: gpt-5.4
+            name: gpt-5.4
+          - id: gpt-5.5
+            name: gpt-5.5
+          - id: gpt-5.6-luna
+            name: gpt-5.6-luna
+          - id: gpt-5.6-sol
+            name: gpt-5.6-sol
+          - id: gpt-5.6-terra
+            name: gpt-5.6-terra
+          - id: text-embedding-3-large
+            name: text-embedding-3-large
+          - id: gpt-6-astra
+            name: gpt-6-astra
+          - id: gpt-6-luna
+            name: gpt-6-luna
+          - id: gpt-6-sol
+            name: gpt-6-sol
+          - id: gpt-6.1-sol
+            name: gpt-6.1-sol
+          - id: gpt-image-2
+            name: gpt-image-2
+          - id: gpt-image-2.5-flare
+            name: gpt-image-2.5-flare
+          - id: gemini-2.5-flash
+            name: gemini-2.5-flash
+          - id: gemini-2.5-pro
+            name: gemini-2.5-pro
+          - id: gemini-3-flash-preview
+            name: gemini-3-flash-preview
+          - id: gemini-3.1-pro-preview
+            name: gemini-3.1-pro-preview
+          - id: gemini-3.5-flash
+            name: gemini-3.5-flash
+          - id: gemini-3.6-flash
+            name: gemini-3.6-flash
+          - id: gemini-3.7-flash
+            name: gemini-3.7-flash
+          - id: gemini-3.8-flash
+            name: gemini-3.8-flash
+          - id: gemini-4-argon
+            name: gemini-4-argon
+          - id: gemini-2.5-flash-image
+            name: gemini-2.5-flash-image
+          - id: gemini-3-pro-image
+            name: gemini-3-pro-image
+          - id: gemini-3.1-flash-image
+            name: gemini-3.1-flash-image
+          - id: gemini-3.1-flash-lite-preview
+            name: gemini-3.1-flash-lite-preview
+          - id: gemini-3.1-flash-lite-image
+            name: gemini-3.1-flash-lite-image
+          - id: gemini-3-pro-image-preview
+            name: gemini-3-pro-image-preview
+          - id: claude-fable-5
+            name: claude-fable-5
+          - id: claude-fable-5-1
+            name: claude-fable-5-1
+          - id: claude-haiku-4-5-20251001
+            name: claude-haiku-4-5-20251001
+          - id: claude-haiku-5-5
+            name: claude-haiku-5-5
+          - id: claude-opus-4-5-20251101
+            name: claude-opus-4-5-20251101
+          - id: claude-opus-4-6
+            name: claude-opus-4-6
+          - id: claude-opus-4-7
+            name: claude-opus-4-7
+          - id: claude-opus-4-8
+            name: claude-opus-4-8
+          - id: claude-opus-5
+            name: claude-opus-5
+          - id: claude-opus-5-5
+            name: claude-opus-5-5
+          - id: claude-sonnet-4-5-20250929
+            name: claude-sonnet-4-5-20250929
+          - id: claude-sonnet-4-6
+            name: claude-sonnet-4-6
+          - id: claude-sonnet-5
+            name: claude-sonnet-5
+          - id: claude-sonnet-5-5
+            name: claude-sonnet-5-5
+          - id: qwen3.6-flash
+            name: qwen3.6-flash
+          - id: qwen3.7-flash
+            name: qwen3.7-flash
+          - id: qwen3.7-max
+            name: qwen3.7-max
+          - id: MiniMax-M2.5
+            name: MiniMax-M2.5
+          - id: MiniMax-M2.7
+            name: MiniMax-M2.7
+          - id: MiniMax-M2.7-highspeed
+            name: MiniMax-M2.7-highspeed
+          - id: MiniMax-M3
+            name: MiniMax-M3
+          - id: MiniMax-M3.1-Flash
+            name: MiniMax-M3.1-Flash
+          - id: text-embedding-v3
+            name: text-embedding-v3
+          - id: text-embedding-v4
+            name: text-embedding-v4
+          - id: gpt-image-2-sp
+            name: gpt-image-2-sp
+          - id: grok-4.20-0309-non-reasoning
+            name: grok-4.20-0309-non-reasoning
+          - id: grok-4.3
+            name: grok-4.3
+          - id: grok-4.5
+            name: grok-4.5
+          - id: grok-4.6
+            name: grok-4.6
+          - id: grok-4.7
+            name: grok-4.7
+          - id: grok-imagine-video
+            name: grok-imagine-video
+          - id: grok-imagine-video-1.5
+            name: grok-imagine-video-1.5
+          - id: doubao-seedance-2-0-260128
+            name: doubao-seedance-2-0-260128
+          - id: doubao-seedance-2-0-fast-260128
+            name: doubao-seedance-2-0-fast-260128
+          - id: doubao-seedance-2-0-mini-260615
+            name: doubao-seedance-2-0-mini-260615
+          - id: deepseek-v4-pro
+            name: deepseek-v4-pro
+          - id: deepseek-v4-flash
+            name: deepseek-v4-flash
+          - id: deepseek-v4-pro-0813
+            name: deepseek-v4-pro-0813
+          - id: glm-5.1
+            name: glm-5.1
+          - id: glm-5.2
+            name: glm-5.2
+          - id: glm-5
+            name: glm-5
+          - id: gpt-6.1-terra
+            name: gpt-6.1-terra
+          - id: gpt-image-2.5-sunburst
+            name: gpt-image-2.5-sunburst
+          - id: text-embedding-3-small
+            name: text-embedding-3-small
+          - id: kimi-k2.5
+            name: kimi-k2.5
+          - id: kimi-k2.6
+            name: kimi-k2.6
+          - id: kimi-k2.7-code
+            name: kimi-k2.7-code
+          - id: kimi-k2.7-code-highspeed
+            name: kimi-k2.7-code-highspeed
+          - id: qwen3.6-plus
+            name: qwen3.6-plus
+          - id: qwen3.7-plus
+            name: qwen3.7-plus
+          - id: bge-m3
+            name: bge-m3
+          - id: bge-reranker-v2-m3
+            name: bge-reranker-v2-m3
+          - id: qwen3-vl-rerank
+            name: qwen3-vl-rerank
+          - id: qwen3.8-max
+            name: qwen3.8-max
+          - id: mimo-v2.6-flash
+            name: mimo-v2.6-flash
+          - id: mimo-v2.6-pro
+            name: mimo-v2.6-pro
+          - id: kling-v2-5-turbo
+            name: kling-v2-5-turbo
+          - id: kling-v2-6
+            name: kling-v2-6
+          - id: kling-v3
+            name: kling-v3
+          - id: kling-v3-omni
+            name: kling-v3-omni
+          - id: kimi-k3
+            name: kimi-k3
+          - id: doubao-seed-2-0-pro-260215
+            name: doubao-seed-2-0-pro-260215
+          - id: doubao-seed-2-1-pro-260628
+            name: doubao-seed-2-1-pro-260628
+          - id: doubao-seed-2-1-turbo-260628
+            name: doubao-seed-2-1-turbo-260628
+          - id: deepseek-flash
+            name: deepseek-flash
+          - id: glm-5.3
+            name: glm-5.3
+          - id: qwen3-asr-flash
+            name: qwen3-asr-flash
+          - id: qwen3-asr-flash-realtime-2026-02-10
+            name: qwen3-asr-flash-realtime-2026-02-10
+          - id: qwen3-max
+            name: qwen3-max
+          - id: qwen3.5-livetranslate-flash-realtime-2026-05-19
+            name: qwen3.5-livetranslate-flash-realtime-2026-05-19
+          - id: qwen3.5-plus
+            name: qwen3.5-plus
+          - id: qwen3.8-flash
+            name: qwen3.8-flash
+          - id: doubao-seedance-2-5-oinone
+            name: doubao-seedance-2-5-oinone
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+          - id: jev-latest
+            name: jev-latest
+          - id: fosun_ds_flash
+            name: fosun_ds_flash
+          - id: kimi-k3.1-pro
+            name: kimi-k3.1-pro
+          - id: deepseek-v4.1-flash-1017
+            name: deepseek-v4.1-flash-1017
+            contextWindow: 1000000
+            maxTokens: 256000
+            input:
+              - text
+              - image
+            reasoningEfforts:
+              off: null
+              low: low
+              medium: medium
+              high: high
+      flf-whx:
+        apiKeyEnv: AIGW_API_KEY
+        api: anthropic-messages
+        baseURL: https://aigw.example.com
+        models:
+          - id: gpt-5.4
+            name: gpt-5.4
+          - id: gpt-5.5
+            name: gpt-5.5
+          - id: gpt-5.6-luna
+            name: gpt-5.6-luna
+          - id: gpt-5.6-sol
+            name: gpt-5.6-sol
+          - id: gpt-5.6-terra
+            name: gpt-5.6-terra
+          - id: text-embedding-3-large
+            name: text-embedding-3-large
+          - id: gpt-6-astra
+            name: gpt-6-astra
+          - id: gpt-6-luna
+            name: gpt-6-luna
+          - id: gpt-6-sol
+            name: gpt-6-sol
+          - id: gpt-6.1-sol
+            name: gpt-6.1-sol
+          - id: gpt-image-2
+            name: gpt-image-2
+          - id: gpt-image-2.5-flare
+            name: gpt-image-2.5-flare
+          - id: gemini-2.5-flash
+            name: gemini-2.5-flash
+          - id: gemini-2.5-pro
+            name: gemini-2.5-pro
+          - id: gemini-3-flash-preview
+            name: gemini-3-flash-preview
+          - id: gemini-3.1-pro-preview
+            name: gemini-3.1-pro-preview
+          - id: gemini-3.5-flash
+            name: gemini-3.5-flash
+          - id: gemini-3.6-flash
+            name: gemini-3.6-flash
+          - id: gemini-3.7-flash
+            name: gemini-3.7-flash
+          - id: gemini-3.8-flash
+            name: gemini-3.8-flash
+          - id: gemini-4-argon
+            name: gemini-4-argon
+          - id: gemini-2.5-flash-image
+            name: gemini-2.5-flash-image
+          - id: gemini-3-pro-image
+            name: gemini-3-pro-image
+          - id: gemini-3.1-flash-image
+            name: gemini-3.1-flash-image
+          - id: gemini-3.1-flash-lite-preview
+            name: gemini-3.1-flash-lite-preview
+          - id: gemini-3.1-flash-lite-image
+            name: gemini-3.1-flash-lite-image
+          - id: gemini-3-pro-image-preview
+            name: gemini-3-pro-image-preview
+          - id: claude-fable-5
+            name: claude-fable-5
+          - id: claude-fable-5-1
+            name: claude-fable-5-1
+          - id: claude-haiku-4-5-20251001
+            name: claude-haiku-4-5-20251001
+          - id: claude-haiku-5-5
+            name: claude-haiku-5-5
+          - id: claude-opus-4-5-20251101
+            name: claude-opus-4-5-20251101
+          - id: claude-opus-4-6
+            name: claude-opus-4-6
+          - id: claude-opus-4-7
+            name: claude-opus-4-7
+          - id: claude-opus-4-8
+            name: claude-opus-4-8
+          - id: claude-opus-5
+            name: claude-opus-5
+          - id: claude-opus-5-5
+            name: claude-opus-5-5
+          - id: claude-sonnet-4-5-20250929
+            name: claude-sonnet-4-5-20250929
+          - id: claude-sonnet-4-6
+            name: claude-sonnet-4-6
+          - id: claude-sonnet-5
+            name: claude-sonnet-5
+          - id: claude-sonnet-5-5
+            name: claude-sonnet-5-5
+          - id: qwen3.6-flash
+            name: qwen3.6-flash
+          - id: qwen3.7-flash
+            name: qwen3.7-flash
+          - id: qwen3.7-max
+            name: qwen3.7-max
+          - id: MiniMax-M2.5
+            name: MiniMax-M2.5
+          - id: MiniMax-M2.7
+            name: MiniMax-M2.7
+          - id: MiniMax-M2.7-highspeed
+            name: MiniMax-M2.7-highspeed
+          - id: MiniMax-M3
+            name: MiniMax-M3
+          - id: MiniMax-M3.1-Flash
+            name: MiniMax-M3.1-Flash
+          - id: text-embedding-v3
+            name: text-embedding-v3
+          - id: text-embedding-v4
+            name: text-embedding-v4
+          - id: gpt-image-2-sp
+            name: gpt-image-2-sp
+          - id: grok-4.20-0309-non-reasoning
+            name: grok-4.20-0309-non-reasoning
+          - id: grok-4.3
+            name: grok-4.3
+          - id: grok-4.5
+            name: grok-4.5
+          - id: grok-4.6
+            name: grok-4.6
+          - id: grok-4.7
+            name: grok-4.7
+          - id: grok-imagine-video
+            name: grok-imagine-video
+          - id: grok-imagine-video-1.5
+            name: grok-imagine-video-1.5
+          - id: doubao-seedance-2-0-260128
+            name: doubao-seedance-2-0-260128
+          - id: doubao-seedance-2-0-fast-260128
+            name: doubao-seedance-2-0-fast-260128
+          - id: doubao-seedance-2-0-mini-260615
+            name: doubao-seedance-2-0-mini-260615
+          - id: deepseek-v4-pro
+            name: deepseek-v4-pro
+          - id: deepseek-v4-flash
+            name: deepseek-v4-flash
+          - id: deepseek-v4-pro-0813
+            name: deepseek-v4-pro-0813
+          - id: glm-5.1
+            name: glm-5.1
+          - id: glm-5.2
+            name: glm-5.2
+          - id: glm-5
+            name: glm-5
+          - id: gpt-6.1-terra
+            name: gpt-6.1-terra
+          - id: gpt-image-2.5-sunburst
+            name: gpt-image-2.5-sunburst
+          - id: text-embedding-3-small
+            name: text-embedding-3-small
+          - id: kimi-k2.5
+            name: kimi-k2.5
+          - id: kimi-k2.6
+            name: kimi-k2.6
+          - id: kimi-k2.7-code
+            name: kimi-k2.7-code
+          - id: kimi-k2.7-code-highspeed
+            name: kimi-k2.7-code-highspeed
+          - id: kimi-k3.1-pro
+            name: kimi-k3.1-pro
+          - id: qwen3.6-plus
+            name: qwen3.6-plus
+          - id: qwen3.7-plus
+            name: qwen3.7-plus
+          - id: bge-m3
+            name: bge-m3
+          - id: bge-reranker-v2-m3
+            name: bge-reranker-v2-m3
+          - id: qwen3-vl-rerank
+            name: qwen3-vl-rerank
+          - id: qwen3.8-max
+            name: qwen3.8-max
+          - id: mimo-v2.6-pro
+            name: mimo-v2.6-pro
+          - id: kling-v2-5-turbo
+            name: kling-v2-5-turbo
+          - id: kling-v2-6
+            name: kling-v2-6
+          - id: kling-v3
+            name: kling-v3
+          - id: kling-v3-omni
+            name: kling-v3-omni
+          - id: kimi-k3
+            name: kimi-k3
+          - id: doubao-seed-2-0-pro-260215
+            name: doubao-seed-2-0-pro-260215
+          - id: doubao-seed-2-1-pro-260628
+            name: doubao-seed-2-1-pro-260628
+          - id: doubao-seed-2-1-turbo-260628
+            name: doubao-seed-2-1-turbo-260628
+          - id: deepseek-flash
+            name: deepseek-flash
+          - id: deepseek-v4.1-flash-1017
+            name: deepseek-v4.1-flash-1017
+            input:
+              - text
+              - image
+            reasoningEfforts:
+              off: null
+              low: low
+              medium: medium
+              high: high
+            contextWindow: 1000000
+            maxTokens: 256000
+          - id: glm-5.3
+            name: glm-5.3
+          - id: qwen3-asr-flash
+            name: qwen3-asr-flash
+          - id: qwen3-asr-flash-realtime-2026-02-10
+            name: qwen3-asr-flash-realtime-2026-02-10
+          - id: qwen3-max
+            name: qwen3-max
+          - id: qwen3.5-livetranslate-flash-realtime-2026-05-19
+            name: qwen3.5-livetranslate-flash-realtime-2026-05-19
+          - id: qwen3.5-plus
+            name: qwen3.5-plus
+          - id: qwen3.8-flash
+            name: qwen3.8-flash
+          - id: doubao-seedance-2-5-oinone
+            name: doubao-seedance-2-5-oinone
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+          - id: jev-latest
+            name: jev-latest
+          - id: fosun_ds_flash
+            name: fosun_ds_flash
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: flp-self-oai
+    model: glm-5.3-flash
+
+# acp 应用层自带一条 `provider: deepseek-official` 的会话默认路由，而本 profile 的
+# 网关里没有这个 provider，不覆盖的话每个会话都拿不到 key（报 no API key）。
+# 这里把会话默认路由指到 flp-self-oai，与上面的 agent-default-model 保持一致。
+# 注意 config 是整段替换而不是深合并，所以只写要覆盖的字段。
+- id: acp
+  name: "@deepseek-ai/dsh-acp"
+  inject: [acpAppStartup]
+  config:
+    provider: flp-self-oai
+    model: glm-5.3-flash
+
+# 业务规则进系统提示词，不进对话历史。
+#
+# 规则正文若出现 `{{...}}` 会被当模板变量插值（未注册的变量让装配直接失败），
+# 所以 `bot/prompts/router/dsh_routing_rules.md` 里不写双花括号——要在规则里举
+# 模板例子就换成等价中文描述。这条约束由 tests/test_dsh_prompt_wiring.py 守。
+#
+# 为什么不用「首条 user 消息」：规则是系统侧约束，塞成 user 发言会被当成
+# 「别人说过的一段话」——后续轮次会冲淡它，会话压缩时还会被当成普通对话裁剪。
+# personaPrefix（order 0）在首方 guidance 之前，先立身份与边界；personaSuffix
+# 在首方 guidance 之后，适合放「怎么收尾」这类补充，规则整体放 prefix 更稳。
+#
+# 正文用 `!!js` 读 `bot/prompts/router/dsh_routing_rules.md`：9KB 规则写进本文件
+# 就是两份事实源，改一处忘一处。读文件失败（改名/删文件）时 dsh 侧直接装配报错
+# ——比「规则静默为空、会话照常跑」好排查得多；`Supervisor.start()` 另有一道
+# 前置校验（`app/dsh/routing.py::load_rules`）。
+# 用 readFileSync 而不是 import：`ctx` 作用域里没有 fs，但 node 内建模块总能拿到。
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    personaPrefix: !!js "process.getBuiltinModule('node:fs').readFileSync(process.env.DSH_ROUTING_RULES || process.cwd() + '/bot/prompts/router/dsh_routing_rules.md', 'utf8')"
+
+# 会话指令：dsh-base 默认把三处文件当「工作区指引」注入每个会话——
+#   1. `$DSH_HOME/AGENTS.md`
+#   2. `<agentsHome>/AGENTS.md`（默认就是 `~/.agents/AGENTS.md`，操作者
+#      与 Claude Code / Codex 共享的那份全局工作流身份）
+#   3. 会话 cwd 到项目根的每一级目录里的 `AGENTS.md` / `CLAUDE.md`
+# 对 bot 来说这三处都是别人的东西：第 2 项是个人工作流，第 3 项会读到本仓
+# CLAUDE.md（那是给改代码的人看的开发约定，不是线上机器人的人设）。
+# 所以整个插件禁用，bot 的指令只有一个来源：`app/dsh/routing.py` 的注入。
+# 用 `disabled` 而不是把候选名清空：候选为空时插件仍会读第 1、2 项全局文件，
+# 只有禁用才真的一个都不读。
+- id: agent-instructions
+  name: "@deepseek-ai/dsh-agent-instructions"
+  disabled: true
+
+# 共享 agents 根：skill-filesystem 的默认根（`<agentsHome>/skills`）与上面
+# 的指令插件都读它，默认值 `~/.agents`。由 supervisor 以 `DSH_AGENTS_HOME` 指到
+# bot 自己的空目录（`<repo>/.dsh-bot/agents`），双保险——将来若有人把
+# includeDefaultRoots 打开，也只会读到 bot 自己的目录。
+# 注意这只是**路径**覆盖，不在操作者家目录写任何东西，也不改其已有配置。
+
+# 技能根：关掉默认根（项目根 .dsh/skills、.agents/skills、$DSH_HOME/skills、
+# ~/.agents/skills），只加载 bot/skills。默认根会把操作者个人的全局 skill
+# 一并读进线上会话，行为不可控（spec AC-5.1）。
+# customSkillDirs 在 dsh 侧用 path.resolve 解析，相对路径会锚到 dsh 进程的 cwd，
+# 而 cwd 由启动方式决定、不可依赖；因此这里必须给绝对路径。
+# 绝对路径从环境变量 DSH_BOT_SKILLS 取（supervisor 启动时按仓库位置注入），
+# 回退值是本机仓库路径，换机器时设 DSH_BOT_SKILLS 即可，不必改本文件。
+# 指向的是 deploy/dsh/agentbiz/skills（白名单同步产物），不是 bot/skills 源目录：
+# dsh 的技能目录**就是路由候选集**，工具型技能放进来会与业务 agent 抢路由。
+# 表达式必须带双引号：!!js 自定义 tag 的 impl 只认带引号的标量，
+# 裸表达式会被解析成 null 而不报错（dsh 侧 dump-config 才能看出来）。
+- id: skill-filesystem
+  name: "@deepseek-ai/dsh-skill-filesystem"
+  config:
+    includeDefaultRoots: false
+    customSkillDirs:
+      - !!js "process.env.DSH_BOT_SKILLS || process.cwd() + '/deploy/dsh/agentbiz/skills'"
+
+# Windows 沙箱后端：**必须留默认配置**，不要塞 runnerCommand。
+#
+# 曾配过 `runnerCommand: [process.execPath]`，目的是绕开 sandbox-local 在 win32
+# 下自动注册的捆绑技能 diagnose-windows-sandbox-acl（它不经过 skill-filesystem，
+# includeDefaultRoots 挡不住）。代价远比收益大——2026-11-06 实测 dsh stderr：
+#
+#   sandbox: Error: sandbox-local: runnerCommand requires at least one
+#            runnerFailureSignatures entry
+#   dsh: warning: 7 entries did not activate
+#   pwsh-sandbox / permission / tool-pwsh / ptc-runtime / workflow-ptc
+#     / tool-workflow: pending (waiting for service: sandbox)
+#
+# 即整个 sandbox 服务装配失败，连带 5 个下游条目永久 pending：会话里**没有任何
+# shell 工具**（实测模型自报工具表无 pwsh/bash），aihot 这类要求 curl 的技能
+# 只能退到 web_fetch。把 node 当 bwrap 兼容 runner 本来就是「假声明」——真跑起来
+# 每条命令都会被 node 当脚本执行。
+#
+# 所以留默认：由 sandbox-local 自己选 win32 的 ACL restricted-token runner
+# （实测 `echo` 真实执行成功）。附带后果是捆绑技能会进技能目录——它是原生
+# 诊断技能（沙箱拒绝写入时用），不是业务能力，由 dsh_routing_rules.md 显式
+# 排除，不参与业务分派。
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'

@@ -1,0 +1,339 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "feishu-agent-platform 运行时架构（dsh 内核）",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/feishu-agent-platform-runtime.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      790
+    ]
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "飞书用户",
+      "sublabel": "群聊 @ / 私聊",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        130,
+        62
+      ]
+    },
+    {
+      "id": "channel",
+      "type": "frontend",
+      "label": "BotChannel",
+      "sublabel": "WebSocket 长连接",
+      "pos": [
+        205,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ]
+    },
+    {
+      "id": "aggregator",
+      "type": "backend",
+      "label": "aggregator",
+      "sublabel": "连发合并 + 附件归一",
+      "pos": [
+        412,
+        300
+      ],
+      "size": [
+        156,
+        66
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "DshGateway",
+      "sublabel": "chat → session 映射",
+      "pos": [
+        600,
+        300
+      ],
+      "size": [
+        156,
+        66
+      ]
+    },
+    {
+      "id": "supervisor",
+      "type": "backend",
+      "label": "DshSupervisor",
+      "sublabel": "进程托管 · 崩溃自愈",
+      "pos": [
+        800,
+        300
+      ],
+      "size": [
+        164,
+        66
+      ]
+    },
+    {
+      "id": "dshcore",
+      "type": "cloud",
+      "label": "dsh 内核",
+      "sublabel": "ACP over stdio · agent loop",
+      "pos": [
+        1058,
+        276
+      ],
+      "size": [
+        196,
+        112
+      ]
+    },
+    {
+      "id": "skills",
+      "type": "database",
+      "label": "技能目录",
+      "sublabel": "白名单同步产物",
+      "pos": [
+        1058,
+        78
+      ],
+      "size": [
+        196,
+        68
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "backend",
+      "label": "MCP 工具面",
+      "sublabel": "feishu · domains · capabilities",
+      "pos": [
+        1058,
+        486
+      ],
+      "size": [
+        196,
+        80
+      ]
+    },
+    {
+      "id": "handlers",
+      "type": "backend",
+      "label": "Handler 能力执行",
+      "sublabel": "数字先知 · CMDB · 定时 · 工单",
+      "pos": [
+        740,
+        486
+      ],
+      "size": [
+        210,
+        80
+      ]
+    },
+    {
+      "id": "bypass",
+      "type": "backend",
+      "label": "旁路服务",
+      "sublabel": "CMDB 提醒 · PRD 监听 · 调度",
+      "pos": [
+        400,
+        486
+      ],
+      "size": [
+        210,
+        80
+      ]
+    },
+    {
+      "id": "a2a",
+      "type": "external",
+      "label": "工单 A2A 服务",
+      "sublabel": "webportal-order-agent :8080",
+      "pos": [
+        740,
+        660
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "dashboard",
+      "type": "frontend",
+      "label": "控制台",
+      "sublabel": ":9112 任务档案 / 指标",
+      "pos": [
+        1058,
+        660
+      ],
+      "size": [
+        196,
+        70
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "dsh 执行内核 · 仓库内引擎 · 独立 DSH_HOME",
+      "wraps": [
+        "dshcore",
+        "skills"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "按会话一份子进程 · 身份经 env 固化",
+      "wraps": [
+        "mcp"
+      ],
+      "pad": 14
+    },
+    {
+      "kind": "region",
+      "label": "旁路：不参与路由",
+      "wraps": [
+        "bypass"
+      ],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    {
+      "from": "user",
+      "to": "channel",
+      "label": "消息 / 附件",
+      "variant": "emphasis",
+      "labelAt": [
+        192,
+        284
+      ]
+    },
+    {
+      "from": "channel",
+      "to": "aggregator",
+      "label": "事件批次",
+      "variant": "emphasis",
+      "labelAt": [
+        372,
+        284
+      ]
+    },
+    {
+      "from": "aggregator",
+      "to": "gateway",
+      "label": "并发闸",
+      "variant": "emphasis",
+      "labelAt": [
+        578,
+        284
+      ]
+    },
+    {
+      "from": "gateway",
+      "to": "supervisor",
+      "label": "session/prompt",
+      "labelAt": [
+        778,
+        284
+      ]
+    },
+    {
+      "from": "supervisor",
+      "to": "dshcore",
+      "label": "ACP JSON-RPC",
+      "variant": "emphasis",
+      "labelAt": [
+        1017,
+        284
+      ]
+    },
+    {
+      "from": "dshcore",
+      "to": "skills",
+      "label": "路由候选集",
+      "labelAt": [
+        1140,
+        212
+      ]
+    },
+    {
+      "from": "dshcore",
+      "to": "mcp",
+      "label": "工具调用",
+      "variant": "emphasis",
+      "labelAt": [
+        1152,
+        446
+      ]
+    },
+    {
+      "from": "mcp",
+      "to": "handlers",
+      "label": "dispatch",
+      "labelAt": [
+        1010,
+        470
+      ]
+    },
+    {
+      "from": "handlers",
+      "to": "a2a",
+      "label": "message:send",
+      "labelAt": [
+        880,
+        630
+      ]
+    },
+    {
+      "from": "aggregator",
+      "to": "bypass",
+      "label": "非@消息截流",
+      "variant": "dashed",
+      "labelAt": [
+        330,
+        430
+      ],
+      "route": "orthogonal-v"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "能力 = 技能目录 + MCP 工具",
+      "items": [
+        "技能目录只放「名字 + 描述」进路由候选集，是白名单同步产物；个人 ~/.agents/skills 不加载",
+        "执行靠 MCP 工具：capabilities 把 Handler 的 tools 原样投影，schema 不重推",
+        "两者任一缺失，模型都会如实回答「本会话没有这个执行入口」"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "三层隔离",
+      "items": [
+        "引擎：仓库 node_modules 钉版本，桌面版升级不影响线上",
+        "运行目录：独立 DSH_HOME + DSH_AGENTS_HOME，不读 ~/.agents/AGENTS.md",
+        "会话指令唯一来源是 app/dsh/routing.py，agent-instructions 整插件禁用"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "旁路不抢路由",
+      "items": [
+        "CMDB 提醒 / PRD 监听 / 定时调度在 main.py 旁路运行，不进消息路由",
+        "授权群的非 @ 消息只进监听窗口，避免把同事闲聊送去作答",
+        "审批门照旧：定时任务创建必发 L2 卡片，订阅只绑发送者本人"
+      ]
+    }
+  ]
+}

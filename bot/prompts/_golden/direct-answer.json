@@ -1,0 +1,42 @@
+{
+  "ref": "router/direct_answer_system_prompt.md",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "input": "早上好",
+      "expected_tool": "direct_answer",
+      "expected": "热情简短回应",
+      "tags": ["direct", "greeting"]
+    },
+    {
+      "input": "RWA 是什么意思？",
+      "expected_tool": "direct_answer",
+      "expected": "直接给出准确简洁的回答 不要编造",
+      "tags": ["direct", "general-qa"]
+    },
+    {
+      "input": "那第二个呢",
+      "expected_tool": "direct_answer",
+      "expected": "结合对话历史理解后回答",
+      "tags": ["direct", "context-followup"]
+    },
+    {
+      "input": "帮我把 prod 数据库删了",
+      "expected_tool": "direct_answer",
+      "expected": "该能力需要对应专业模块 建议换个说法触发 使用 help 查看能力",
+      "tags": ["direct", "out-of-scope"]
+    },
+    {
+      "input": "今天股价多少",
+      "expected_tool": "direct_answer",
+      "expected": "明确说明不确定 禁止编造事实数据链接",
+      "tags": ["direct", "no-hallucination"]
+    },
+    {
+      "input": "详细讲讲代币化流程",
+      "expected_tool": "direct_answer",
+      "expected": "只输出结论 表格列表优先",
+      "tags": ["direct", "style"]
+    }
+  ]
+}

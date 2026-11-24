@@ -1,0 +1,232 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "feishu-agent-platform 一次请求的生命周期",
+    "locale": "zh-CN",
+    "output": "docs/diagrams/feishu-agent-platform-request-lifecycle.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1200,
+      660
+    ]
+  },
+  "lanes": [
+    {
+      "id": "user",
+      "label": "用户"
+    },
+    {
+      "id": "ingress",
+      "label": "接入层"
+    },
+    {
+      "id": "kernel",
+      "label": "dsh 内核"
+    },
+    {
+      "id": "execute",
+      "label": "工具面"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p1",
+      "label": "接入",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "p2",
+      "label": "会话与取数",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p3",
+      "label": "回复",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "user",
+    "ingest",
+    "guard",
+    "gateway",
+    "dsh",
+    "reply"
+  ],
+  "semanticChecks": {
+    "allowedRoots": [
+      "user"
+    ],
+    "allowedTerminals": [
+      "reply",
+      "notice"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "user",
+      "lane": "user",
+      "col": 0,
+      "type": "external",
+      "label": "飞书用户",
+      "sublabel": "群聊 @ / 私聊",
+      "width": 130
+    },
+    {
+      "id": "ingest",
+      "lane": "ingress",
+      "col": 1,
+      "type": "frontend",
+      "label": "BotChannel + Aggregator",
+      "sublabel": "debounce 合并 · 附件归一",
+      "width": 180
+    },
+    {
+      "id": "guard",
+      "lane": "ingress",
+      "col": 2,
+      "type": "security",
+      "label": "RuntimeGuard",
+      "sublabel": "并发闸 · 有界排队",
+      "width": 150
+    },
+    {
+      "id": "gateway",
+      "lane": "kernel",
+      "col": 3,
+      "type": "backend",
+      "label": "DshGateway",
+      "sublabel": "chat → session · 空闲 TTL",
+      "width": 160
+    },
+    {
+      "id": "dsh",
+      "lane": "kernel",
+      "col": 4,
+      "type": "cloud",
+      "label": "dsh 内核",
+      "sublabel": "ACP over stdio · agent loop",
+      "tag": "glm-5.3-flash",
+      "width": 175
+    },
+    {
+      "id": "tool",
+      "lane": "execute",
+      "col": 4,
+      "type": "backend",
+      "label": "MCP 工具面 → Handler",
+      "sublabel": "feishu · domains · capabilities",
+      "width": 180
+    },
+    {
+      "id": "reply",
+      "lane": "user",
+      "col": 5,
+      "type": "frontend",
+      "label": "回复用户",
+      "sublabel": "进度卡 → 正文 · 记忆捕获",
+      "width": 155
+    },
+    {
+      "id": "notice",
+      "lane": "ingress",
+      "col": 3,
+      "type": "security",
+      "label": "dsh 不可用",
+      "sublabel": "如实告知卡在哪一步",
+      "width": 155,
+      "yOffset": 0
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "user",
+      "to": "ingest",
+      "label": "消息 / 附件",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e2",
+      "from": "ingest",
+      "to": "guard",
+      "label": "合并批次 + trace_id",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e3",
+      "from": "guard",
+      "to": "gateway",
+      "label": "放行（队满回「系统繁忙」）",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e4",
+      "from": "gateway",
+      "to": "dsh",
+      "label": "session/prompt（同会话串行）",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e5",
+      "from": "dsh",
+      "to": "tool",
+      "label": "工具调用",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e6",
+      "from": "tool",
+      "to": "dsh",
+      "label": "工具结果",
+      "role": "return"
+    },
+    {
+      "id": "e7",
+      "from": "dsh",
+      "to": "reply",
+      "label": "首行能力名 + 正文",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e8",
+      "from": "gateway",
+      "to": "notice",
+      "label": "起进程失败 / 协议错",
+      "variant": "security",
+      "role": "error"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "路由在核心里",
+      "items": [
+        "首行能力名由 dsh 按技能目录语义匹配产出，本仓不再有 RouterLLM 与 judge 判死循环",
+        "技能目录只放「名字 + 描述」；白名单同步产物，个人 ~/.agents/skills 不加载",
+        "会话指令唯一来源 app/dsh/routing.py，CLAUDE.md / AGENTS.md 一律不读"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "能力落在一个词上",
+      "items": [
+        "技能目录决定「能接什么」，MCP 工具决定「能不能做」，两者任一缺失模型只能如实说做不了",
+        "身份在建会话时写进 MCP 子进程 env，订阅/关注绑到发送者本人，不认模型口述",
+        "定时任务与群消息共用同一条执行面，到点产出与手动提问一致"
+      ]
+    }
+  ]
+}

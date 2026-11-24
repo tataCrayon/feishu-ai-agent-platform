@@ -1,0 +1,109 @@
+{
+  "ref": "router/system_prompt.md",
+  "version": "1.2.0",
+  "description": "路由引擎意图识别 golden 用例 — 验证用户消息 → 正确路由工具",
+  "cases": [
+    {
+      "input": "查一下 t_rwa_product 表结构",
+      "expected_tool": "route_to_db_agent",
+      "expected": "数据库查询：查看表结构",
+      "tags": [
+        "router",
+        "db"
+      ]
+    },
+    {
+      "input": "SELECT * FROM users WHERE id = 1",
+      "expected_tool": "route_to_db_agent",
+      "expected": "数据库查询：执行 SQL",
+      "tags": [
+        "router",
+        "db"
+      ]
+    },
+    {
+      "input": "今天有什么技术动态",
+      "expected_tool": "route_to_daily_agent",
+      "expected": "技术日报：获取当天日报",
+      "tags": [
+        "router",
+        "daily"
+      ]
+    },
+    {
+      "input": "查一下昨天的日报",
+      "expected_tool": "route_to_daily_agent",
+      "expected": "技术日报：历史日报查询",
+      "tags": [
+        "router",
+        "daily"
+      ]
+    },
+    {
+      "input": "创建一个工单，变更数据库表",
+      "expected_tool": "route_to_webportal_agent",
+      "expected": "工单系统：创建工单",
+      "tags": [
+        "router",
+        "webportal"
+      ]
+    },
+    {
+      "input": "你好",
+      "expected_tool": "direct_answer",
+      "expected": "直接回答：打招呼",
+      "tags": [
+        "router",
+        "direct"
+      ]
+    },
+    {
+      "input": "谢谢",
+      "expected_tool": "direct_answer",
+      "expected": "直接回答：感谢",
+      "tags": [
+        "router",
+        "direct"
+      ]
+    },
+    {
+      "input": "你能做什么",
+      "expected_tool": "route_to_help",
+      "expected": "帮助：能力查询",
+      "tags": [
+        "router",
+        "help"
+      ]
+    },
+    {
+      "input": "rwa 的确权流程是什么",
+      "expected_tool": "direct_answer",
+      "expected": "综合业务：RWA 业务问答",
+      "tags": [
+        "router",
+        "rwa",
+        "routable-guard"
+      ]
+    },
+    {
+      "input": "帮我查一下这段代码的逻辑",
+      "expected_tool": "direct_answer",
+      "expected": "综合业务：代码分析",
+      "tags": [
+        "router",
+        "rwa",
+        "routable-guard"
+      ]
+    },
+    {
+      "input": "普通工单文本：我要改 flf_wealth_backend 的 t_user 表字段类型",
+      "expected_tool": "route_to_webportal_agent",
+      "expected": "工单系统：无审批链接的普通工单文本仍走 webportal",
+      "tags": [
+        "router",
+        "webportal",
+        "disambiguation"
+      ]
+    }
+  ]
+}

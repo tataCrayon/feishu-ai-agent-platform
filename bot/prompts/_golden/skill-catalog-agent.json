@@ -1,0 +1,61 @@
+{
+  "ref": "agents/skill-catalog-agent.md",
+  "version": "1.1.0",
+  "description": "skill-catalog-agent golden — 验证只查询不立项、不合并同名、不把缺项说成不通过、状态语义照工具转述",
+  "cases": [
+    {
+      "input": "团队 Skill 建设情况怎么样了",
+      "expected_behavior": "get_skill_status_board() 现状总表：状态计数 + 治理缺口 + 近 30 天活跃 + 分支在飞",
+      "expected": "按状态计数汇总，不逐个展开正文",
+      "tags": ["skill-catalog", "status-board"]
+    },
+    {
+      "input": "技能库现在有多少生产状态的规范",
+      "expected_behavior": "get_skill_status_board() 返回草稿/生产/未验证/下线候选计数",
+      "expected": "给状态计数，不编造生产数量",
+      "tags": ["skill-catalog", "status-board"]
+    },
+    {
+      "input": "flp-database-design 什么状态",
+      "expected_behavior": "get_skill_status(name=flp-database-design) 状态卡：状态 + 八项字段打勾 + 依据",
+      "expected": "照工具推导状态转述，不自行判断",
+      "tags": ["skill-catalog", "status-card"]
+    },
+    {
+      "input": "这个技能的复审过期了吗",
+      "expected_behavior": "get_skill_status 状态卡：复审过期按状态变化转述（自动降级为未验证），不软化为提醒",
+      "expected": "复审过期是状态变化不是提醒",
+      "tags": ["skill-catalog", "status-card"]
+    },
+    {
+      "input": "团队现在有哪些 Skill",
+      "expected_behavior": "list_team_skills(branch 为空)，先给分支一览，不展开全部正文",
+      "expected": "按分支列出数量，不合并同名",
+      "tags": ["skill-catalog", "list"]
+    },
+    {
+      "input": "infra-ops-skills 上有什么",
+      "expected_behavior": "list_team_skills(branch=infra-ops-skills)，展开该分支并带 Git 链接",
+      "expected": "只展开点名的分支，每条带链接",
+      "tags": ["skill-catalog", "branch"]
+    },
+    {
+      "input": "我想做一个 Nacos 配置查询，有没有现成的",
+      "expected_behavior": "find_similar_skills(query 保留 Nacos 配置查询)，列出接近项，不说可以立项",
+      "expected": "列出接近的现成 Skill，不建议新建",
+      "tags": ["skill-catalog", "dedupe"]
+    },
+    {
+      "input": "审查一下 nacos-guard",
+      "expected_behavior": "review_skill(name=nacos-guard)，对照 owner/明确不做/复审日/version 打勾，不打通过或不通过",
+      "expected": "缺项列表加 Git 链接，不下线结论",
+      "tags": ["skill-catalog", "review"]
+    },
+    {
+      "input": "帮我把这个 Skill 装到机器人上",
+      "expected_behavior": "拒绝安装和改仓库，只提供目录查询",
+      "expected": "不安装，不改仓库",
+      "tags": ["skill-catalog", "readonly"]
+    }
+  ]
+}

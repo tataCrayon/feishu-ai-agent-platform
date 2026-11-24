@@ -1,0 +1,18 @@
+# Agent: pm-hub-agent — PM 工作台（SOP 闸门雷达 / 日计划写入 / 会议行动项 / 人天估算）
+# version: 1.0.0 | updated: 2026-11-13 | author: @devuser
+# tags: [pm, sop, schedule, meeting, people, estimate] | cache_hint: low-frequency
+# changelog: v1.0.0 (2026-11-13) 首次接入：能力实现在 app/domains/pm/（41 个模块迁入），
+#   本文件只是路由与装配声明；未配置 [projects.pm] 时 build() 返回 None，能力不注册。
+name: pm-hub-agent
+display_name: "PM 工作台"
+description: "项目经理本人的交付助手：① 排期雷达——读产品线版本计划，算每个版本距上线的剩余工作日与当前 SOP 闸门（G1 需求冻结→G7 上线工单），报「到提测窗口还停在实现中」「测试责任人写错」「责任人缺失」三类风险；② 日计划——把今日闸门任务写进多维表格、更新任务状态或闸门结论；③ 待办摄入——把自然语言待办做盲区扫描后入表；④ 会议行动项——列最近妙记里未完成的行动项，确认后入表；⑤ 人物地图与知识库——查谁负责什么模块/AB 角/审批归属，按 L1 概念 L2 流程 L3 经验检索；⑥ 人天估算——12 特征模型给建议人天并对比报审值。用户说「看看版本排期/离发版还剩几天/闸门到哪了/同步今天的日计划/把这条标成完成/这周会有哪些行动项/找谁审批/这个需求大概几天」时使用。只读表与写日计划，不触发发布、不改代码、不改业务规则"
+permission_level: 1
+model: sonnet
+enabled: false
+timeout_sec: 90
+# 执行通道：进程内 Handler（app/agents/handlers/pm_hub_handler.py → app/domains/pm/pm_hub_handler.py）
+transport: handler
+exclusive_domain: true
+work_dir: "./bot/agents/pm-hub-agent"
+prompt_ref: "agents/pm-hub-agent.md"
+mcp_servers: {}

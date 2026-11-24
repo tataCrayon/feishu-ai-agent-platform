@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentMate 控制台</title>
+<script>
+  // 首帧前解析主题，避免浅色偏好用户看到暗色闪烁（同 archify 约定）
+  (function () {
+    try {
+      var theme = null;
+      try { theme = localStorage.getItem('portalmate-theme'); } catch (_) {}
+      if (theme !== 'light' && theme !== 'dark') {
+        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (_) {}
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════
+   THEME — 语义色板沿用 archify（docs/diagrams 图表同源）
+   frontend=青(通道/回执) backend=翠(编排/自答) cloud=琥珀(专业Agent)
+   database=紫(数据/记忆) security=玫红(质量判定) messagebus=橙(观测)
+   external=石板(用户)
+   ══════════════════════════════════════════════════════════ */
+:root, [data-theme="dark"] {
+  --bg: #020617;
+  --grid: #1e293b;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --text-faint: #7d8da1;
+
+  --panel: rgba(15, 23, 42, 0.55);
+  --panel-solid: #0f172a;
+  --panel-border: #1e293b;
+  --lane-fill: rgba(15, 23, 42, 0.22);
+  --lane-stroke: #334155;
+  --mask: #0f172a;
+
+  --frontend-fill:    rgba(8, 51, 68, 0.4);
+  --frontend-stroke:  #22d3ee;
+  --backend-fill:     rgba(6, 78, 59, 0.4);
+  --backend-stroke:   #34d399;
+  --database-fill:    rgba(76, 29, 149, 0.4);
+  --database-stroke:  #a78bfa;
+  --cloud-fill:       rgba(120, 53, 15, 0.3);
+  --cloud-stroke:     #fbbf24;
+  --security-fill:    rgba(136, 19, 55, 0.4);
+  --security-stroke:  #fb7185;
+  --messagebus-fill:  rgba(251, 146, 60, 0.3);
+  --messagebus-stroke:#fb923c;
+  --external-fill:    rgba(30, 41, 59, 0.5);
+  --external-stroke:  #94a3b8;
+
+  --arrow: #64748b;
+  --arrow-emphasis: #34d399;
+}
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --grid: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+  --text-faint: #64748b;
+
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-solid: #ffffff;
+  --panel-border: #e2e8f0;
+  --lane-fill: rgba(248, 250, 252, 0.65);
+  --lane-stroke: #cbd5e1;
+  --mask: #ffffff;
+
+  --frontend-fill:    rgba(34, 211, 238, 0.15);
+  --frontend-stroke:  #0891b2;
+  --backend-fill:     rgba(52, 211, 153, 0.18);
+  --backend-stroke:   #059669;
+  --database-fill:    rgba(167, 139, 250, 0.2);
+  --database-stroke:  #7c3aed;
+  --cloud-fill:       rgba(251, 191, 36, 0.18);
+  --cloud-stroke:     #d97706;
+  --security-fill:    rgba(251, 113, 133, 0.15);
+  --security-stroke:  #e11d48;
+  --messagebus-fill:  rgba(251, 146, 60, 0.15);
+  --messagebus-stroke:#ea580c;
+  --external-fill:    rgba(148, 163, 184, 0.18);
+  --external-stroke:  #64748b;
+
+  --arrow: #94a3b8;
+  --arrow-emphasis: #059669;
+}
+
+/* 整体 125% 放大：rem 字号/间距随根字号等比放大，ECharts 数值由 JS 侧 UI 常量同步放大 */
+html { font-size: 125%; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Noto Sans Mono CJK SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 1.5rem 2rem 2.5rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.container { width: 100%; max-width: 1800px; margin: 0 auto; }
+
+/* ── Header（archify：脉冲点 + 标题 + 副题） ── */
+.header { margin-bottom: 1.25rem; }
+.header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.pulse-dot {
+  width: 12px; height: 12px; flex-shrink: 0;
+  background: var(--frontend-stroke); border-radius: 50%;
+  box-shadow: 0 0 10px var(--frontend-stroke);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.025em; }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.hbtn {
+  background: color-mix(in srgb, var(--panel-solid) 80%, transparent);
+  color: var(--text-muted);
+  border: 1px solid var(--lane-stroke);
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.625rem;
+  font-family: inherit; font-size: 0.72rem; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  backdrop-filter: blur(10px);
+  transition: all 0.15s;
+}
+.hbtn:hover { color: var(--text); border-color: var(--text-dim); }
+.subtitle { color: var(--text-muted); font-size: 0.8rem; margin-left: 1.75rem; }
+.subtitle strong { color: var(--text); font-weight: 600; }
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex; gap: 0.25rem; margin-bottom: 1.1rem; flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.75rem; padding: 0.3rem;
+  backdrop-filter: blur(8px);
+}
+.tab-btn {
+  padding: 0.45rem 1rem; border: none; border-radius: 0.55rem;
+  background: transparent; color: var(--text-muted);
+  font-family: inherit; font-size: 0.76rem; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.tab-btn.active { background: var(--backend-fill); color: var(--backend-stroke); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── 面板（archify diagram-container：暗色面板 + 网格底纹 + 虚线框） ── */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  padding: 1.25rem 1.4rem;
+  backdrop-filter: blur(6px);
+  position: relative;
+}
+.panel.grid-bg { background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 32px 32px; }
+.panel + .panel, .row + .row, .panel + .row, .row + .panel { margin-top: 1rem; }
+.panel-title {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.82rem; font-weight: 600; margin-bottom: 0.9rem;
+}
+.panel-title .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.cyan { background: var(--frontend-stroke); }
+.dot.emerald { background: var(--backend-stroke); }
+.dot.amber { background: var(--cloud-stroke); }
+.dot.purple { background: var(--database-stroke); }
+.dot.rose { background: var(--security-stroke); }
+.dot.orange { background: var(--messagebus-stroke); }
+.dot.slate { background: var(--external-stroke); }
+.panel-title .tag {
+  margin-left: auto; color: var(--text-dim); font-size: 0.62rem;
+  font-weight: 600; letter-spacing: 0.12em;
+}
+.panel-title select, .panel-title .time-toggle {
+  background: var(--panel-solid); color: var(--text-muted);
+  border: 1px solid var(--lane-stroke); border-radius: 0.4rem;
+  padding: 0.2rem 0.6rem; font-family: inherit; font-size: 0.68rem; cursor: pointer;
+}
+.panel-title select:focus { outline: none; border-color: var(--frontend-stroke); }
+.panel-title .time-toggle.active { color: var(--frontend-stroke); border-color: var(--frontend-stroke); }
+
+.row { display: grid; gap: 1rem; }
+.row.r2 { grid-template-columns: 1.55fr 1fr; }
+.row.r2e { grid-template-columns: 1fr 1.55fr; }
+@media (max-width: 1350px) { .row.r2, .row.r2e { grid-template-columns: 1fr; } }
+
+/* ── KPI（用户问题 → 一个数字） ── */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.75rem; padding: 0.85rem 1rem;
+  backdrop-filter: blur(6px);
+}
+.kpi .k-q { color: var(--text-dim); font-size: 0.62rem; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+.kpi .k-label { color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem; }
+.kpi .k-value { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; }
+.kpi .k-sub { color: var(--text-dim); font-size: 0.65rem; margin-top: 0.2rem; }
+.kpi.tone-cyan .k-value { color: var(--frontend-stroke); }
+.kpi.tone-emerald .k-value { color: var(--backend-stroke); }
+.kpi.tone-amber .k-value { color: var(--cloud-stroke); }
+.kpi.tone-purple .k-value { color: var(--database-stroke); }
+.kpi.tone-rose .k-value { color: var(--security-stroke); }
+.kpi.tone-slate .k-value { color: var(--external-stroke); }
+
+/* ── 路由视图（消息旅程纵向树：飞书 → 智能路由 → 终态扇形 → agent 明细） ── */
+.tree-wrap { position: relative; overflow-x: auto; padding: 0.4rem 0 0.2rem; }
+.tree { min-width: 660px; }
+.trunk-seg { width: 2px; height: 20px; background: var(--arrow); margin: 0 auto; position: relative; }
+.seg-pill {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  margin-left: 0.6rem; white-space: nowrap;
+  background: var(--panel-solid); border: 1px solid var(--lane-stroke);
+  border-radius: 999px; padding: 0.12rem 0.55rem;
+  font-size: 0.62rem; color: var(--text-muted); font-weight: 600;
+}
+.spoke-node { display: flex; justify-content: center; }
+.spoke-node .flow-node { min-width: 230px; }
+/* 扇形分流：横母线 + 各列竖支线（纯 CSS，与 5×1fr 列几何对齐：首末列心 = (宽 - 4×gap) / 10） */
+.fan { position: relative; }
+.fan-bus {
+  position: absolute; top: 0;
+  left: calc((100% - 40px) / 10); right: calc((100% - 40px) / 10);
+  height: 2px; background: var(--arrow);
+}
+.fan-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-top: 18px; }
+.fan-col { position: relative; display: flex; flex-direction: column; min-width: 118px; }
+.fan-col::before {           /* 母线 → 节点顶 的竖支线 */
+  content: ''; position: absolute; top: -18px; left: 50%;
+  width: 2px; height: 13px; background: var(--arrow); transform: translateX(-1px);
+}
+.fan-col::after {            /* 支线末端箭头 */
+  content: ''; position: absolute; top: -6px; left: 50%;
+  border: 4px solid transparent; border-top-color: var(--arrow);
+  transform: translateX(-4px);
+}
+/* 专业助手列：下方 agent 明细（最终由哪个 agent 处理） */
+.sub-stack { margin-top: 10px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.sub-link { width: 2px; height: 10px; background: var(--arrow); opacity: 0.75; margin: 0 auto; }
+.agent-chip {
+  border: 1px solid color-mix(in srgb, var(--cloud-stroke) 55%, transparent);
+  background: color-mix(in srgb, var(--cloud-fill) 70%, transparent);
+  border-radius: 0.45rem; padding: 0.3rem 0.55rem;
+  display: flex; align-items: baseline; gap: 0.45rem;
+}
+.agent-chip .ac-label { font-size: 0.64rem; font-weight: 600; color: var(--cloud-stroke); flex: 1 1 auto; text-align: left; min-width: 0; }
+.agent-chip .ac-count { font-size: 0.74rem; font-weight: 700; color: var(--cloud-stroke); }
+.flow-stats {
+  display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; margin-top: 0.8rem;
+  font-size: 0.62rem; color: var(--text-dim); position: relative; z-index: 2;
+}
+.flow-stats b { color: var(--text-muted); font-weight: 600; }
+.flow-node {
+  flex: 0 0 auto; min-width: 135px;
+  border-radius: 0.5rem; border: 1.5px solid;
+  padding: 0.55rem 0.7rem; text-align: center;
+  display: flex; flex-direction: column; justify-content: center; gap: 0.25rem;
+}
+.flow-node .fn-label { font-size: 0.68rem; font-weight: 600; line-height: 1.35; }
+.flow-node .fn-count { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+.flow-node .fn-hint { font-size: 0.58rem; opacity: 0.75; line-height: 1.4; }
+.flow-node.n-external { background: var(--external-fill); border-color: var(--external-stroke); color: var(--external-stroke); }
+.flow-node.n-external .fn-count { color: var(--text); }
+.flow-node.n-frontend { background: var(--frontend-fill); border-color: var(--frontend-stroke); color: var(--frontend-stroke); }
+.flow-node.n-frontend .fn-count { color: var(--frontend-stroke); }
+.flow-node.n-backend { background: var(--backend-fill); border-color: var(--backend-stroke); color: var(--backend-stroke); }
+.flow-node.n-backend .fn-count { color: var(--backend-stroke); }
+.flow-node.n-cloud { background: var(--cloud-fill); border-color: var(--cloud-stroke); color: var(--cloud-stroke); }
+.flow-node.n-cloud .fn-count { color: var(--cloud-stroke); }
+.flow-node.n-database { background: var(--database-fill); border-color: var(--database-stroke); color: var(--database-stroke); }
+.flow-node.n-database .fn-count { color: var(--database-stroke); }
+.flow-node.n-security { background: var(--security-fill); border-color: var(--security-stroke); color: var(--security-stroke); }
+.flow-node.n-security .fn-count { color: var(--security-stroke); }
+.flow-node.n-messagebus { background: var(--messagebus-fill); border-color: var(--messagebus-stroke); color: var(--messagebus-stroke); }
+.flow-node.n-messagebus .fn-count { color: var(--messagebus-stroke); }
+.flow-caption { color: var(--text-dim); font-size: 0.62rem; margin-top: 0.5rem; }
+.flow-caption strong { color: var(--text-muted); }
+
+/* ── 表格 ── */
+.trace-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+/* 报告全文 markdown 渲染（极简样式，跟随主题变量） */
+.report-md h1, .report-md h2, .report-md h3 { margin: 0.9em 0 0.4em; line-height: 1.4; }
+.report-md h1 { font-size: 1.05rem; } .report-md h2 { font-size: 0.95rem; } .report-md h3 { font-size: 0.86rem; }
+.report-md table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.76rem; }
+.report-md th, .report-md td { border: 1px solid var(--lane-stroke); padding: 0.35rem 0.55rem; text-align: left; }
+.report-md th { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.report-md code { background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 4px; padding: 0.08em 0.35em; font-size: 0.9em; }
+.report-md pre { background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 8px; padding: 0.7rem; overflow: auto; }
+.report-md pre code { background: none; padding: 0; }
+.report-md blockquote { border-left: 3px solid var(--backend-stroke); margin: 0.5em 0; padding: 0.1em 0.8em; color: var(--text-muted); }
+.report-md ul, .report-md ol { padding-left: 1.4em; } .report-md li { margin: 0.15em 0; }
+.report-md hr { border: none; border-top: 1px dashed var(--lane-stroke); margin: 0.8em 0; }
+.trace-table th {
+  text-align: left; padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--lane-stroke);
+  color: var(--text-dim); font-weight: 600; font-size: 0.6rem;
+  letter-spacing: 0.1em;
+}
+.trace-table td { padding: 0.45rem 0.6rem; border-bottom: 1px dashed var(--lane-stroke); vertical-align: top; }
+.trace-table tr:last-child td { border-bottom: none; }
+.trace-table tr:hover td { background: color-mix(in srgb, var(--text) 3%, transparent); }
+
+.pill {
+  display: inline-block; font-size: 0.6rem; padding: 0.1rem 0.5rem;
+  border-radius: 999px; font-weight: 600; white-space: nowrap;
+}
+.pill.success { background: var(--backend-fill); color: var(--backend-stroke); }
+.pill.error, .pill.giveup { background: var(--security-fill); color: var(--security-stroke); }
+.pill.timeout, .pill.clarify { background: var(--cloud-fill); color: var(--cloud-stroke); }
+.pill.neutral { background: var(--external-fill); color: var(--external-stroke); }
+.route-chip {
+  display: inline-block; font-size: 0.58rem; padding: 0.08rem 0.4rem;
+  border: 1px solid var(--lane-stroke); border-radius: 0.25rem;
+  color: var(--text-muted); margin: 0.1rem 0.15rem 0.1rem 0; white-space: nowrap;
+}
+.route-chip.first { border-color: var(--backend-stroke); color: var(--backend-stroke); background: var(--backend-fill); }
+
+/* ── 时间线（最近消息，用户视角） ── */
+.trace-item {
+  display: flex; gap: 0.7rem; align-items: baseline;
+  padding: 0.5rem 0; border-bottom: 1px dashed var(--lane-stroke);
+  cursor: pointer; transition: background 0.1s;
+  flex-wrap: wrap;
+}
+.trace-item:last-child { border-bottom: none; }
+.trace-item:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.trace-item .t-time { color: var(--text-dim); font-size: 0.62rem; white-space: nowrap; }
+.trace-item .t-query { font-size: 0.74rem; font-weight: 600; }
+.trace-item .t-route { font-size: 0.62rem; color: var(--text-muted); }
+.trace-item .t-route .arrow { color: var(--text-dim); margin: 0 0.25rem; }
+.trace-item .t-meta { margin-left: auto; color: var(--text-dim); font-size: 0.62rem; white-space: nowrap; }
+
+/* ── Agent 健康节点 ── */
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem; }
+.agent-node {
+  background: var(--lane-fill); border: 1px solid var(--lane-stroke);
+  border-radius: 0.5rem; padding: 0.6rem 0.7rem; cursor: pointer; transition: all 0.15s;
+}
+.agent-node:hover { border-color: var(--text-dim); transform: translateY(-1px); }
+.agent-node .a-name { font-size: 0.68rem; font-weight: 600; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.45rem; color: var(--text); }
+.agent-node .a-indicator { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.agent-node .a-indicator.green { background: var(--backend-stroke); box-shadow: 0 0 6px var(--backend-stroke); }
+.agent-node .a-indicator.yellow { background: var(--cloud-stroke); box-shadow: 0 0 6px var(--cloud-stroke); }
+.agent-node .a-indicator.red { background: var(--security-stroke); box-shadow: 0 0 6px var(--security-stroke); }
+.agent-node .a-indicator.gray { background: var(--text-dim); }
+.agent-node .a-meta { font-size: 0.6rem; color: var(--text-dim); line-height: 1.5; }
+.agent-node .a-bar { margin-top: 0.35rem; height: 3px; border-radius: 2px; background: var(--lane-stroke); overflow: hidden; }
+.agent-node .a-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+.agent-node .a-bar-fill.green { background: var(--backend-stroke); }
+.agent-node .a-bar-fill.yellow { background: var(--cloud-stroke); }
+.agent-node .a-bar-fill.red { background: var(--security-stroke); }
+
+/* ── Guard 并发仪表 ── */
+.guard-gauge { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; }
+.guard-gauge .g-num { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; color: var(--frontend-stroke); }
+.guard-gauge .g-den { font-size: 0.9rem; color: var(--text-dim); }
+.guard-gauge .g-label { font-size: 0.68rem; color: var(--text-muted); }
+.guard-bar { height: 6px; border-radius: 3px; background: var(--lane-stroke); overflow: hidden; margin-bottom: 0.8rem; }
+.guard-bar span { display: block; height: 100%; border-radius: 3px; background: var(--frontend-stroke); transition: width 0.5s; }
+.guard-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; }
+.guard-fact { background: var(--lane-fill); border: 1px dashed var(--lane-stroke); border-radius: 0.45rem; padding: 0.5rem 0.6rem; }
+.guard-fact .f-num { font-size: 1rem; font-weight: 700; color: var(--text); }
+.guard-fact .f-num.warn { color: var(--cloud-stroke); }
+.guard-fact .f-num.bad { color: var(--security-stroke); }
+.guard-fact .f-label { font-size: 0.6rem; color: var(--text-dim); margin-top: 0.15rem; line-height: 1.4; }
+.interrupt-banner {
+  margin-top: 0.8rem; border: 1px solid var(--security-stroke);
+  background: var(--security-fill); border-radius: 0.5rem;
+  padding: 0.6rem 0.8rem; font-size: 0.68rem; color: var(--text);
+}
+.interrupt-banner .ib-title { color: var(--security-stroke); font-weight: 700; margin-bottom: 0.3rem; font-size: 0.68rem; }
+.interrupt-banner .ib-title strong { color: var(--security-stroke); }
+
+/* ── BDD 叙事卡片（archify cards） ── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1rem; }
+.card {
+  background: var(--panel);
+  border-radius: 0.75rem; border: 1px solid var(--panel-border);
+  padding: 1rem 1.15rem;
+  backdrop-filter: blur(6px);
+}
+.card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
+.card h3 { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.card .card-gherkin { color: var(--text-dim); font-size: 0.62rem; margin-bottom: 0.55rem; }
+.card .card-gherkin strong { font-weight: 700; }
+.card ul { list-style: none; color: var(--text-muted); font-size: 0.68rem; }
+.card li { margin-bottom: 0.4rem; line-height: 1.55; }
+.card li strong { color: var(--text); font-weight: 600; }
+
+/* ── Overlay ── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(2, 6, 23, 0.78); z-index: 100; overflow: auto;
+  backdrop-filter: blur(4px);
+}
+[data-theme="light"] .overlay { background: rgba(148, 163, 184, 0.35); }
+.overlay .panel { max-width: 1230px; margin: 2.5rem auto; }
+.close-btn {
+  cursor: pointer; color: var(--text-muted); font-size: 0.66rem;
+  border: 1px solid var(--lane-stroke); padding: 0.2rem 0.6rem;
+  border-radius: 0.4rem; transition: all 0.15s;
+}
+.close-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+/* ── Empty / util ── */
+.empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-dim); }
+.empty-state .empty-icon { font-size: 1.6rem; margin-bottom: 0.35rem; opacity: 0.55; }
+.empty-state .empty-text { font-size: 0.72rem; }
+.mono { font-size: 0.68rem; }
+.text-muted { color: var(--text-muted); }
+.text-dim { color: var(--text-dim); }
+.text-green { color: var(--backend-stroke); }
+.text-red { color: var(--security-stroke); }
+.text-yellow { color: var(--cloud-stroke); }
+.text-cyan { color: var(--frontend-stroke); }
+.charts-note { color: var(--text-dim); font-size: 0.62rem; margin-top: 0.4rem; }
+footer {
+  margin-top: 1.5rem; padding-top: 0.8rem; color: var(--text-dim);
+  font-size: 0.62rem; border-top: 1px dashed var(--lane-stroke);
+  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ═══ Header ═══ -->
+  <div class="header">
+    <div class="header-row">
+      <div class="pulse-dot"></div>
+      <h1>AgentMate 控制台</h1>
+      <div class="header-actions">
+        <button class="hbtn" id="btn-theme" type="button" onclick="toggleTheme()">🌓 明暗</button>
+        <button class="hbtn" type="button" onclick="refreshAll()">🔄 刷新</button>
+      </div>
+    </div>
+    <div class="subtitle">从用户座位看系统 · <strong>「我发了一句话，然后呢？」</strong> · <span id="subtitle">加载中…</span></div>
+  </div>
+
+  <!-- ═══ Tabs ═══ -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tabOverview">体验总览</button>
+    <button class="tab-btn" data-tab="tabBehavior">行为闭环</button>
+    <button class="tab-btn" data-tab="tabReports">📄 报告</button>
+    <button class="tab-btn" data-tab="tabOps">服务健康</button>
+    <button class="tab-btn" data-tab="tabUsers">👥 用户</button>
+    <button class="tab-btn" data-tab="tabArch">🗺 架构视图</button>
+  </div>
+
+  <!-- ═══ Tab 1: 体验总览 ═══ -->
+  <div id="tabOverview" class="tab-content active">
+
+    <!-- KPI：每个数字回答一个用户问题 -->
+    <div class="kpi-row">
+      <div class="kpi tone-cyan">
+        <div class="k-q">我发了多少句话？</div>
+        <div class="k-label">今日消息</div>
+        <div class="k-value" id="kpTodayCalls">-</div>
+        <div class="k-sub" id="kpTotalCalls">近 7 天: -</div>
+      </div>
+      <div class="kpi tone-emerald">
+        <div class="k-q">多少句直接得到了回答？</div>
+        <div class="k-label">直接自答</div>
+        <div class="k-value" id="kpDirect">-</div>
+        <div class="k-sub">寒暄 / 常识，秒回</div>
+      </div>
+      <div class="kpi tone-amber">
+        <div class="k-q">多少句交给了专业助手？</div>
+        <div class="k-label">专业助手处理</div>
+        <div class="k-value" id="kpRouted">-</div>
+        <div class="k-sub" id="kpRoutedHint">先回执再答复</div>
+      </div>
+      <div class="kpi tone-purple">
+        <div class="k-q">多少句被反问澄清？</div>
+        <div class="k-label">反问澄清</div>
+        <div class="k-value" id="kpClarify">-</div>
+        <div class="k-sub">不确定就追问，不乱猜</div>
+      </div>
+      <div class="kpi tone-rose">
+        <div class="k-q">回答靠谱吗？</div>
+        <div class="k-label">回答完成率</div>
+        <div class="k-value" id="kpSuccessRate">-</div>
+        <div class="k-sub" id="kpErrorDetail">异常: -</div>
+      </div>
+      <div class="kpi tone-slate">
+        <div class="k-q">我等了多久？</div>
+        <div class="k-label">用户等待 P50</div>
+        <div class="k-value" id="kpLatency">-</div>
+        <div class="k-sub" id="kpLatencyP95">P95: -</div>
+      </div>
+    </div>
+
+    <!-- 行为流向 + Agent 健康 -->
+    <div class="row r2">
+      <div class="panel grid-bg">
+        <div class="panel-title"><span class="dot cyan"></span> 路由视图 <span class="tag" id="flowPeriod">今天</span></div>
+        <div class="tree-wrap" id="flowStrip">
+          <div class="empty-state" style="width:100%"><div class="empty-icon">🧭</div><div class="empty-text">加载中…</div></div>
+        </div>
+        <div class="flow-caption">一条消息的一生：<strong>飞书进入</strong> → 秒收回执 → <strong>智能路由</strong>判断去向 → <strong>终态</strong>（直接自答 / 交给专业助手 / 反问 / 介绍 / 告知）；执行失败走结构化门禁（错误/空回复）直接如实告知，绝不静默吞掉。</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><span class="dot emerald"></span> 各助手状态 <span class="tag">心跳巡检</span></div>
+        <div id="agentGrid" class="agent-grid"><div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+    </div>
+
+    <!-- 趋势 + 最近消息 -->
+    <div class="row r2">
+      <div class="panel">
+        <div class="panel-title">
+          <span class="dot orange"></span> 运行趋势
+          <div style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+            <span class="time-toggle active" data-days="7" onclick="switchTrendDays(7)">7天</span>
+            <span class="time-toggle" data-days="30" onclick="switchTrendDays(30)">30天</span>
+            <select id="trendMetric" onchange="renderTrendChart()">
+              <option value="llm_calls">LLM 调用</option>
+              <option value="llm_tokens">Token 消耗</option>
+              <option value="llm_cost">成本</option>
+              <option value="avg_latency_ms">平均延迟</option>
+              <option value="p95_latency_ms">P95 延迟</option>
+              <option value="success_rate">成功率</option>
+            </select>
+          </div>
+        </div>
+        <div id="trendChart" style="width:100%;height:290px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><span class="dot cyan"></span> 最近消息 <span class="tag">点击看全链</span></div>
+        <div id="recentTraces"><div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 2: 行为闭环（BDD 用户视角） ═══ -->
+  <div id="tabBehavior" class="tab-content">
+
+    <!-- Given / When / Then 叙事 -->
+    <div class="cards" style="margin-bottom:1rem;">
+      <div class="card">
+        <div class="card-header"><div class="dot cyan"></div><h3>我发了一句话</h3></div>
+        <div class="card-gherkin"><strong>Given</strong> 我在飞书群 / 私聊里 @ AgentMate 发消息</div>
+        <ul>
+          <li>• 收到即回执：<strong>「✅ 已接收，正在处理…」</strong>；任务拥挤时告知「正在排队处理…」</li>
+          <li>• 连续多条消息自动合并，不会重复处理</li>
+          <li>• 多轮对话带上下文，追问「那第二个呢」也听得懂</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot amber"></div><h3>系统怎么处理</h3></div>
+        <div class="card-gherkin"><strong>When</strong> 消息进入编排闭环（router → agent → gather）</div>
+        <ul>
+          <li>• RouterLLM 判断这句话交给谁：<strong>直接回答 / 专业助手 / 反问澄清</strong></li>
+          <li>• 交给专业助手时先看到「正在交给 XX 处理…」</li>
+          <li>• 回复经过质量判定，不满足意图自动换路重试</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot emerald"></div><h3>我看到了什么</h3></div>
+        <div class="card-gherkin"><strong>Then</strong> [用户看到] 可观察的终态，绝不静默</div>
+        <ul>
+          <li>• <strong>正式回复 / 追问澄清 / 诚实告知做不到</strong>，三选一必达</li>
+          <li>• 排队超时或拥挤时明确说「系统繁忙，请稍后再试」</li>
+          <li>• 服务重启中断的任务，重启后主动提醒重新发送</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 路由去向 + 回答质量 -->
+    <div class="row r2">
+      <div class="panel">
+        <div class="panel-title"><span class="dot emerald"></span> 这句话交给了谁 <span class="tag">近 7 天路由分布</span></div>
+        <div id="routeDist"><div class="empty-state"><div class="empty-icon">🧭</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><span class="dot rose"></span> 回答质量与兜底 <span class="tag">近 7 天</span></div>
+        <div id="qualityBox"><div class="empty-state"><div class="empty-icon">🛡️</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+    </div>
+
+    <!-- 最近任务全表 -->
+    <div class="panel">
+      <div class="panel-title"><span class="dot orange"></span> 最近任务档案 <span class="tag">logs/tasks · 点击看全链</span></div>
+      <div id="taskTable"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+
+    <!-- 行为趋势 -->
+    <div class="panel">
+      <div class="panel-title"><span class="dot purple"></span> 行为分布趋势 <span class="tag">最近 7 天 · 用户视角去向</span></div>
+      <div id="behaviorChart" style="width:100%;height:275px;"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 3: 报告中心（Agent 回复全文，logs/task_replies/） ═══ -->
+  <div id="tabReports" class="tab-content">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot orange"></span> 智能体报告 · 回复全文存档
+        <div style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+          <span class="pill neutral" id="reportSummary">加载中…</span>
+          <select id="reportAgent" onchange="loadReports()">
+            <option value="">全部助手</option>
+          </select>
+          <select id="reportDays" onchange="loadReports()">
+            <option value="1">今天</option>
+            <option value="7" selected>7天</option>
+            <option value="30">30天</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin:0.35rem 0 0.6rem;">
+        每次编排的 Agent 回复全文（markdown 原样落盘 <code>logs/task_replies/</code>，与任务档案同 task_id 关联）。点击条目查看完整报告。
+      </div>
+      <div id="reportList"><div class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 4: 服务健康 ═══ -->
+  <div id="tabOps" class="tab-content">
+    <div class="panel">
+      <div class="panel-title"><span class="dot emerald"></span> 定时任务都在干什么 · 跑得怎么样 <span class="tag">logs/scheduled_tasks</span></div>
+      <div id="scheduledKpis" style="display:flex;gap:0.6rem;flex-wrap:wrap;margin:0.4rem 0 0.7rem;"></div>
+      <div id="scheduledList"><div class="empty-state"><div class="empty-icon">⏰</div><div class="empty-text">加载中…</div></div></div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin:0.6rem 0 0.35rem;">最近执行流水（逐次落盘 <code>logs/scheduler_runs/</code>，最近 30 天，新→旧）：</div>
+      <div id="scheduledRuns"><div class="empty-state"><div class="empty-icon">📜</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot purple"></span> Claude Code 通道费用 <span class="tag">~/.claude/projects 转录聚合</span></div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin:0.35rem 0 0.6rem;">
+        rwa-bot 经 cc-connect 执行时烧的 token 不在任务档案里（编排层费用只含路由/直答）。此处从 Claude Code 本地转录按天聚合，与 aigw 账单对账用。
+      </div>
+      <div id="ccUsageBox"><div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+    <div class="row r2">
+      <div class="panel">
+        <div class="panel-title"><span class="dot cyan"></span> 并发闸与排队 <span class="tag">runtime guard</span></div>
+        <div id="guardBox"><div class="empty-state"><div class="empty-icon">🚦</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><span class="dot rose"></span> 最近异常 <span class="tag">点击看全链</span></div>
+        <div id="errorList"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">加载中…</div></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot emerald"></span> 心跳巡检 <span class="tag">logs/health/current.json</span></div>
+      <div id="heartbeatStatus"><div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot amber"></span> 能力开关 <span class="tag">哪些能力在对外服务 · 一键上下线</span></div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin:0.35rem 0 0.6rem;">
+        关闭 = 路由立即不可见（/help、意图路由、任务分解），重启后仍保持；不影响健康探测。热插拔安装的能力带 📦 标识。
+      </div>
+      <div id="agentSwitchList"><div class="empty-state"><div class="empty-icon">🎛</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot slate"></span> 系统信息</div>
+      <div id="sysInfo" style="font-size:0.7rem;color:var(--text-muted);line-height:1.9;">
+        <div>数据来源: <code>logs/agents/</code> · <code>logs/tasks/</code> · <code>logs/runtime_tasks/</code> · <code>logs/health/</code></div>
+        <div>自动刷新: 60s · 明暗主题跟随系统，可手动切换</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 4: 用户 ═══ -->
+  <div id="tabUsers" class="tab-content">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot slate"></span> 谁在用 · 用得怎么样
+        <div style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+          <span class="pill neutral" id="userSummary">加载中…</span>
+          <select id="userDays" onchange="loadUserStats()">
+            <option value="1">今天</option>
+            <option value="7" selected>7天</option>
+            <option value="30">30天</option>
+          </select>
+        </div>
+      </div>
+      <div id="userList"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 5: 架构视图（archify 交互图内嵌，首次进入才加载） ═══ -->
+  <div id="tabArch" class="tab-content">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot cyan"></span> 运行时架构 · 组件拓扑
+        <a href="/arch/runtime.html" target="_blank" rel="noopener" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);text-decoration:none;">新窗口打开 ↗</a>
+      </div>
+      <iframe id="archRuntime" data-src="/arch/runtime.html" title="feishu-agent-platform 运行时架构图" style="width:100%;height:72vh;border:1px solid var(--panel-border);border-radius:12px;background:var(--panel-solid);"></iframe>
+    </div>
+    <div class="panel" style="margin-top:1rem;">
+      <div class="panel-title">
+        <span class="dot emerald"></span> 技术结构 · 一次请求的生命周期
+        <a href="/arch/lifecycle.html" target="_blank" rel="noopener" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);text-decoration:none;">新窗口打开 ↗</a>
+      </div>
+      <iframe id="archLifecycle" data-src="/arch/lifecycle.html" title="feishu-agent-platform 请求生命周期图" style="width:100%;height:72vh;border:1px solid var(--panel-border);border-radius:12px;background:var(--panel-solid);"></iframe>
+    </div>
+  </div>
+
+  <!-- ═══ Report Overlay（报告全文） ═══ -->
+  <div id="reportOverlay" class="overlay" onclick="if(event.target===this) closeReport()">
+    <div class="panel" style="max-width:900px;">
+      <div class="panel-title">
+        <span class="dot orange"></span> <span id="reportTitle">报告 · 加载中</span>
+        <span class="close-btn" style="margin-left:auto;" onclick="closeReport()">✕ 关闭</span>
+      </div>
+      <div id="reportMeta" class="charts-note" style="margin:0.4rem 0;"></div>
+      <div id="reportContent" class="report-md" style="max-height:70vh;overflow:auto;line-height:1.75;font-size:0.82rem;">
+        <div class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">加载中…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Trace Overlay ═══ -->
+  <div id="traceOverlay" class="overlay" onclick="if(event.target===this) closeTrace()">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot orange"></span> <span id="traceTitle">全链路 · 加载中</span>
+        <span class="close-btn" style="margin-left:auto;" onclick="closeTrace()">✕ 关闭</span>
+      </div>
+      <div id="traceDetail"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ User Detail Overlay ═══ -->
+  <div id="userOverlay" class="overlay" onclick="if(event.target===this) closeUserDetail()">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="dot slate"></span> <span id="userDetailTitle">用户详情</span>
+        <span class="close-btn" style="margin-left:auto;" onclick="closeUserDetail()">✕ 关闭</span>
+      </div>
+      <div id="userDetailContent"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">加载中…</div></div></div>
+    </div>
+  </div>
+
+  <footer>
+    <span>用户视角组织 · 每块面板回答一个用户问题（BDD）</span>
+    <span id="footerTime">-</span>
+  </footer>
+</div>
+
+<script>
+// ═══════════════════════════ Globals ═══════════════════════════
+let _trendChart = null, _behaviorChart = null, _trendData = null, _trendDays = 7;
+let _dashboardData = null, _behaviorData = null;
+
+// agent id → 用户视角名（与后端 _ROUTE_LABELS 同口径）
+const AGENT_LABELS = {
+  'db-agent': '数据库查询（已下线）',
+  'daily-agent': '技术日报', 'webportal-agent': '工单系统',
+  'rwa-bot': 'RWA 业务助手',
+  'skill-elk-log-query': 'ELK 日志查询', 'skill-order-sql': '工单→SQL',
+  'skill-demo-guard': '项目巡检', 'skill-x': '占位技能',
+  'direct-answer': '直接自答', 'langgraph_router': '智能路由', 'help': '能力介绍', 'clarify': '反问澄清'
+};
+function agentLabel(name) { return AGENT_LABELS[name] || name; }
+
+// ═══════════════════════════ Theme ═══════════════════════════
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('portalmate-theme', next); } catch (_) {}
+  // 图表配色跟随主题重绘
+  setTimeout(() => { renderTrendChart(); renderBehaviorChart(); }, 60);
+}
+
+// 从 CSS 变量取色，图表与主题同源
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+function chartBase() {
+  return {
+    textColor: cssVar('--text-muted', '#94a3b8'),
+    gridColor: cssVar('--grid', '#1e293b'),
+    tooltipBg: cssVar('--panel-solid', '#0f172a'),
+    tooltipBorder: cssVar('--lane-stroke', '#334155'),
+    frontend: cssVar('--frontend-stroke', '#22d3ee'),
+    backend: cssVar('--backend-stroke', '#34d399'),
+    cloud: cssVar('--cloud-stroke', '#fbbf24'),
+    purple: cssVar('--database-stroke', '#a78bfa'),
+    rose: cssVar('--security-stroke', '#fb7185'),
+    orange: cssVar('--messagebus-stroke', '#fb923c'),
+  };
+}
+
+// ═══════════════════════════ Utils ═══════════════════════════
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+async function req(url) {
+  const r = await fetch(url);
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail||r.statusText); }
+  return r.json();
+}
+async function sendJson(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail||r.statusText); }
+  return r.json();
+}
+const _SOURCE_LABELS = { builtin: '内置', skill: '扩展技能', hotplug: '📦 热插拔' };
+async function loadAgentSwitches() {
+  const box = document.getElementById('agentSwitchList');
+  try {
+    const d = await req('/api/agents');
+    if (!d.agents || !d.agents.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">🎛</div><div class="empty-text">无已注册能力</div></div>';
+      return;
+    }
+    box.innerHTML = d.agents.map(a => `
+      <div style="display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.2rem;border-bottom:1px solid var(--border);">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:0.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.display_name)}</div>
+          <div style="font-size:0.62rem;color:var(--text-muted);">${esc(a.name)} · ${_SOURCE_LABELS[a.source]||a.source} · ${esc(a.transport)}</div>
+        </div>
+        ${a.routable ? '' : '<span class="pill neutral" style="font-size:0.6rem;">yaml 声明不可路由</span>'}
+        <button onclick="toggleAgent('${esc(a.name)}', ${a.switch_enabled})"
+          style="border:none;cursor:${a.routable?'pointer':'not-allowed'};border-radius:999px;padding:0.18rem 0.7rem;font-size:0.66rem;font-weight:600;
+          background:${a.switch_enabled ? 'color-mix(in srgb, var(--backend-stroke) 18%, transparent)' : 'color-mix(in srgb, var(--security-stroke) 20%, transparent)'};
+          color:${a.switch_enabled ? 'var(--backend-stroke)' : 'var(--security-stroke)'};${a.routable?'':'opacity:0.55;'}">
+          ${a.switch_enabled ? '● 服务中' : '○ 已下线'}
+        </button>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(String(e.message||e))}</div></div>`;
+  }
+}
+async function toggleAgent(name, currentlyEnabled) {
+  if (!confirm(`${currentlyEnabled ? '下线' : '恢复'}能力「${name}」？路由立即生效。`)) return;
+  try {
+    await sendJson('/api/agents/switch', { name, enabled: !currentlyEnabled });
+    await loadAgentSwitches();
+  } catch (e) {
+    alert('开关失败：' + (e.message || e));
+  }
+}
+function fmtCost(v) {
+  if (!v || v <= 0) return '-';
+  if (v < 0.01) return '$' + v.toFixed(6);
+  if (v < 1) return '$' + v.toFixed(4);
+  return '$' + v.toFixed(2);
+}
+function fmtTokens(v) { return v != null ? (v/1000).toFixed(1) + 'k' : '-'; }
+function fmtPct(v) { return (v != null && v !== 0) ? Math.round(v*100) + '%' : '-'; }
+function fmtMs(v) { return v ? Math.round(v) + 'ms' : '-'; }
+function fmtSec(v) { return v ? (v/1000).toFixed(1) + 's' : '-'; }
+function fmtTime(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  catch(e) { return ts; }
+}
+function statusPill(st) {
+  const s = st || 'unknown';
+  const cls = s === 'success' ? 'success' : (s === 'error' || s === 'giveup') ? s : (s === 'clarify' || s === 'timeout') ? s : 'neutral';
+  const label = {success:'✓ 回复', error:'✗ 异常', giveup:'✗ 做不到', clarify:'? 反问', timeout:'⏱ 超时'}[s] || s;
+  return `<span class="pill ${cls}">${esc(label)}</span>`;
+}
+function initEChart(domId) {
+  const dom = document.getElementById(domId);
+  dom.innerHTML = '';
+  if (!window.echarts) {
+    dom.innerHTML = '<div class="empty-state"><div class="empty-icon">📉</div><div class="empty-text">图表库未加载（CDN 不可达），数据仍可从表格查看</div></div>';
+    return null;
+  }
+  return echarts.init(dom, null, { renderer: 'canvas' });
+}
+
+// ═══════════════════════════ Tabs ═══════════════════════════
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const btn = document.querySelector(`[data-tab="${tabId}"]`);
+  if (btn) btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  if (tabId === 'tabBehavior') loadBehaviorTab();
+  if (tabId === 'tabReports') loadReports();
+  if (tabId === 'tabOps') loadOpsTab();
+  if (tabId === 'tabUsers') setTimeout(loadUserStats, 50);
+  if (tabId === 'tabArch') loadArchTab();
+  setTimeout(() => { _trendChart && _trendChart.resize(); _behaviorChart && _behaviorChart.resize(); }, 100);
+}
+
+// ═══════════════════════════ 报告 Tab ═══════════════════════════
+// 智能体回复全文存档（logs/task_replies/，与任务档案同 task_id）
+let _reportAgentsLoaded = false;
+async function loadReports() {
+  const days = document.getElementById('reportDays').value;
+  const agent = document.getElementById('reportAgent').value;
+  const box = document.getElementById('reportList');
+  box.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">加载中…</div></div>';
+  try {
+    const data = await req(`/api/stats/reports?days=${days}${agent ? '&agent=' + encodeURIComponent(agent) : ''}`);
+    document.getElementById('reportSummary').textContent = `${data.total} 份报告`;
+    // 助手过滤下拉：首次进入时按报告里出现过的 agent 填充
+    if (!_reportAgentsLoaded) {
+      const sel = document.getElementById('reportAgent');
+      const seen = [...new Set((data.reports || []).map(r => r.agent).filter(Boolean))];
+      seen.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = agentLabel(a);
+        sel.appendChild(opt);
+      });
+      _reportAgentsLoaded = true;
+    }
+    if (!data.reports || !data.reports.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">暂无报告存档（Agent 处理任务后自动落盘）</div></div>';
+      return;
+    }
+    let html = '<table class="trace-table"><tr><th>时间</th><th>助手</th><th>问题</th><th>回复摘要</th><th>耗时</th><th></th></tr>';
+    data.reports.forEach(r => {
+      html += `<tr style="cursor:pointer;" onclick="openReport('${esc(r.task_id)}')">
+        <td class="text-dim">${esc(fmtTime(r.ts))}</td>
+        <td><strong>${esc(r.agent_label || r.agent)}</strong></td>
+        <td style="max-width:260px;">${esc(r.query || '-')}</td>
+        <td class="text-dim" style="max-width:320px;">${esc((r.preview || '').slice(0, 80))}${(r.preview||'').length > 80 ? '…' : ''}</td>
+        <td class="mono">${fmtSec(r.duration_ms)}</td>
+        <td>${statusPill(r.status)}</td>
+      </tr>`;
+    });
+    box.innerHTML = html + '</table>';
+  } catch(e) {
+    box.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`;
+  }
+}
+
+async function openReport(taskId) {
+  if (!taskId) return;
+  const overlay = document.getElementById('reportOverlay');
+  overlay.style.display = 'block';
+  document.getElementById('reportTitle').textContent = '报告 · ' + taskId;
+  document.getElementById('reportContent').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">加载中…</div></div>';
+  document.getElementById('reportMeta').textContent = '';
+  try {
+    const r = await req('/api/stats/reports/' + encodeURIComponent(taskId));
+    document.getElementById('reportTitle').textContent = (r.agent_label || r.agent || '报告') + ' · ' + taskId.slice(0, 8);
+    document.getElementById('reportMeta').innerHTML =
+      `<strong>${esc(r.agent_label || r.agent)}</strong> · ${esc(fmtTime(r.ts))} · 耗时 ${fmtSec(r.duration_ms)} ${statusPill(r.status)}<br>问题：${esc(r.query || '-')}`;
+    const body = document.getElementById('reportContent');
+    if (typeof marked !== 'undefined') {
+      // marked 解析后先过 DOMPurify 级别的净化不可得（无外网包），此处报告为自家 Agent 产出，
+      // 仍按防 XSS 习惯先转义非标签内容：marked 默认不转义原生 HTML，报告里无用户可控 HTML 注入面
+      body.innerHTML = marked.parse(r.content || '');
+    } else {
+      body.innerHTML = '<pre style="white-space:pre-wrap;">' + esc(r.content || '') + '</pre>';
+    }
+  } catch(e) {
+    document.getElementById('reportContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`;
+  }
+}
+function closeReport() { document.getElementById('reportOverlay').style.display = 'none'; }
+
+// 架构视图：iframe 懒加载（data-src → src），首次进入才拉取 archify 图
+function loadArchTab() {
+  document.querySelectorAll('#tabArch iframe[data-src]').forEach(f => {
+    f.src = f.dataset.src;
+    f.removeAttribute('data-src');
+  });
+}
+
+// ═══════════════════════════ 总览 KPI + 健康簇 ═══════════════════════════
+async function loadDashboard() {
+  const [d, b] = await Promise.all([
+    req('/api/stats/dashboard'),
+    req('/api/stats/behavior?days=1')
+  ]);
+  _dashboardData = d; _behaviorData = b;
+  const h = d.agent_health || {};
+  const agents = h.agents || {};
+  const agentKeys = Object.keys(agents);
+  const errCount = (d.recent_traces || []).filter(t => t.status === 'error').length;
+
+  document.getElementById('kpTodayCalls').textContent = d.today_calls || 0;
+  document.getElementById('kpTotalCalls').textContent = '近 7 天: ' + (d.total_calls || 0);
+  document.getElementById('kpDirect').textContent = b.direct_answered;
+  document.getElementById('kpRouted').textContent = b.routed_to_agent;
+  document.getElementById('kpRoutedHint').textContent = '另有反问 ' + b.clarified + ' · 介绍 ' + b.helped;
+  document.getElementById('kpClarify').textContent = b.clarified;
+  document.getElementById('kpSuccessRate').textContent = fmtPct(d.success_rate);
+  document.getElementById('kpErrorDetail').textContent = '异常: ' + errCount + ' / ' + (d.today_calls || 0) + ' · 负反馈 ' + b.negative_feedback;
+  document.getElementById('kpLatency').textContent = d.p50_latency_ms ? fmtSec(d.p50_latency_ms) : '-';
+  document.getElementById('kpLatencyP95').textContent = 'P95: ' + (d.p95_latency_ms ? fmtSec(d.p95_latency_ms) : '-');
+
+  renderFlowStrip(b);
+  renderAgentHealth(agents);
+  renderRecentTraces(b.recent_tasks && b.recent_tasks.length ? b.recent_tasks : agentTracesToTasks(d.recent_traces || []));
+  document.getElementById('subtitle').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+}
+
+// agent 日志的 trace → 任务视图（behavior 无数据时兜底）
+function agentTracesToTasks(traces) {
+  return traces.map(t => ({
+    task_id: t.trace_id, ts: t.timestamp || '', sender_name: '',
+    query: '', route_labels: [agentLabel(t.agent)], status: t.status,
+    duration_ms: t.duration_ms || 0, response_preview: '', gate_blocked: false
+  }));
+}
+
+// ── 路由视图（行为流向：飞书 → 智能路由 → 终态 → agent 明细） ──
+function renderFlowStrip(b) {
+  const box = document.getElementById('flowStrip');
+  document.getElementById('flowPeriod').textContent = b.period_days > 1 ? '近 ' + b.period_days + ' 天' : '今天';
+  // 终态扇形 5 列（列序即路由决策顺序），与后端 route_outcomes/AGENT_LABELS 同口径
+  const branches = [
+    { key: 'direct_answer', label: '直接自答', hint: '寒暄/常识 · 秒回', cls: 'n-backend',
+      count: b.direct_answered },
+    { key: 'agent', label: '🤝 专业助手', hint: '先回执「正在交给 XX」', cls: 'n-cloud',
+      count: b.routed_to_agent },
+    { key: 'route_to_clarify', label: '反问澄清', hint: '不确定就追问', cls: 'n-frontend',
+      count: b.clarified },
+    { key: 'route_to_help', label: '能力介绍', hint: '/help 自我介绍', cls: 'n-database',
+      count: b.helped },
+    { key: 'route_to_giveup', label: '诚实告知', hint: '没有对应工具时', cls: 'n-security',
+      count: b.gaveup },
+  ];
+  const maxCount = Math.max(1, ...branches.map(x => x.count));
+  // 「专业助手」列下方 agent 明细：从 recent_tasks 按 final_agent 聚合（最终由哪个 agent 处理）
+  const agentDist = {};
+  (b.recent_tasks || []).forEach(t => {
+    const a = t.final_agent || t.final_label;
+    if (a) agentDist[a] = (agentDist[a] || 0) + 1;
+  });
+  const skip = new Set(['direct-answer', 'langgraph_router', 'help', 'clarify']);
+  const agentChips = Object.entries(agentDist)
+    .filter(([id]) => !skip.has(id))
+    .sort((x, y) => y[1] - x[1])
+    .map(([id, n]) => {
+      const barW = Math.max(8, Math.round(n * 36 / Math.max(1, b.routed_to_agent)));
+      return `<div class="agent-chip"><span class="ac-label">${esc(agentLabel(id))}</span><span class="ac-count">${n}</span><span class="ac-bar" style="flex-basis:auto;width:${barW}px"></span></div>`;
+    }).join('');
+  box.innerHTML = `
+    <div class="tree-wrap">
+      <div class="tree">
+
+        <div class="spoke-node">
+          <div class="flow-node n-external ${b.total_messages === 0 ? 'zero' : ''}">
+            <div class="fn-label">飞书消息</div>
+            <div class="fn-count">${b.total_messages}</div>
+            <div class="fn-hint">飞书 DM / 群聊</div>
+          </div>
+        </div>
+
+        <div class="trunk-seg"><span class="seg-pill">收到回执 ✓</span></div>
+
+        <div class="spoke-node">
+          <div class="flow-node n-messagebus">
+            <div class="fn-label">智能路由</div>
+            <div class="fn-count">${b.total_messages}</div>
+            <div class="fn-hint">秒回执，再判断：自答 or 交给谁</div>
+          </div>
+        </div>
+
+        <div class="trunk-seg"></div>
+
+        <div class="fan">
+          <div class="fan-bus"></div>
+          <div class="fan-grid">
+            ${branches.map(br => {
+              const pct = b.total_messages > 0 ? Math.round(br.count * 100 / b.total_messages) : 0;
+              const barW = Math.max(4, Math.round(br.count * 100 / maxCount));
+              return `
+            <div class="fan-col">
+              <div class="flow-node ${br.cls} ${br.count === 0 ? 'zero' : ''}">
+                <div class="fn-label">${esc(br.label)}</div>
+                <div class="fn-count">${br.count}</div>
+                <div class="fn-hint">${esc(br.hint)}${br.count > 0 ? ' · ' + pct + '%' : ''}</div>
+                <div class="fn-bar" style="width:${br.count > 0 ? barW : 0}%"></div>
+              </div>
+              ${br.key === 'agent' && agentChips ? `
+              <div class="sub-stack">
+                <div class="sub-link"></div>
+                ${agentChips}
+              </div>` : ''}
+            </div>`;}).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flow-stats">
+      <span><b>${b.replied}</b> 已回复</span>
+      <span><b>${b.gate_blocked}</b> 结构化门禁拦截</span>
+      <span><b>${b.negative_feedback}</b> 负反馈</span>
+      <span><b>${fmtSec(b.p50_duration_ms)}</b> P50 等待</span>
+    </div>`;
+}
+
+// ── Agent 健康网格 ──
+function renderAgentHealth(agents) {
+  const grid = document.getElementById('agentGrid');
+  const keys = Object.keys(agents);
+  if (!keys.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">暂无健康数据</div></div>';
+    return;
+  }
+  grid.innerHTML = keys.map(name => {
+    const a = agents[name] || {};
+    const st = a.status || 'no_data';
+    const indicator = st === 'green' ? 'green' : st === 'yellow' ? 'yellow' : st === 'red' ? 'red' : 'gray';
+    const dur = a.duration_ms ? Math.round(a.duration_ms) + 'ms' : '-';
+    const fail = a.consecutive_failures || 0;
+    const barW = st === 'green' ? 25 : st === 'yellow' ? 55 : st === 'red' ? 85 : 100;
+    return `<div class="agent-node" onclick="switchTab('tabOps')">
+      <div class="a-name"><span class="a-indicator ${indicator}"></span>${esc(agentLabel(name))}</div>
+      <div class="a-meta">${esc(st)} · ${esc(dur)}${fail > 1 ? ' · ×' + fail : ''}</div>
+      <div class="a-bar"><div class="a-bar-fill ${indicator}" style="width:${barW}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── 最近消息（用户视角时间线） ──
+function renderRecentTraces(tasks) {
+  const box = document.getElementById('recentTraces');
+  if (!tasks.length) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">暂无消息记录</div></div>';
+    return;
+  }
+  box.innerHTML = tasks.slice(0, 12).map(t => {
+    const route = (t.route_labels && t.route_labels.length)
+      ? t.route_labels.map(esc).join('<span class="arrow">→</span>')
+      : esc(agentLabel(t.agent || ''));
+    return `<div class="trace-item" onclick="openTrace('${esc(t.task_id || t.trace_id)}')">
+      <span class="t-time">${esc(fmtTime(t.ts || t.timestamp))}</span>
+      <span class="t-query">${esc(t.query || t.agent || '（消息）')}</span>
+      ${t.query ? `<span class="t-route">${route}</span>` : ''}
+      ${statusPill(t.status)}
+      <span class="t-meta">${fmtSec(t.duration_ms)}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════ 趋势图 ═══════════════════════════
+async function loadTrendChart() {
+  const t = await req('/api/stats/dashboard/trends?days=' + _trendDays);
+  _trendData = t.days || [];
+  renderTrendChart();
+}
+function switchTrendDays(days) {
+  _trendDays = days;
+  document.querySelectorAll('.time-toggle').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.time-toggle[data-days="${days}"]`);
+  if (el) el.classList.add('active');
+  loadTrendChart();
+}
+function renderTrendChart() {
+  const metric = document.getElementById('trendMetric').value;
+  if (_trendChart) { _trendChart.dispose(); _trendChart = null; }
+  if (!_trendData || !_trendData.length) {
+    document.getElementById('trendChart').innerHTML = '<div class="empty-state" style="padding:56px 16px"><div class="empty-icon">📈</div><div class="empty-text">暂无趋势数据</div></div>';
+    return;
+  }
+  const C = chartBase();
+  const labels = _trendData.map(d => d.date.slice(5));
+  const values = _trendData.map(d => {
+    let v = d[metric];
+    if (metric === 'cache_hit_rate' || metric === 'success_rate') v = Math.round((v||0)*100);
+    return v || 0;
+  });
+  const isPct = metric === 'cache_hit_rate' || metric === 'success_rate';
+  const isCost = metric === 'llm_cost';
+  const isMs = metric === 'avg_latency_ms' || metric === 'p95_latency_ms';
+  // 每个指标带自己的单位：tooltip 与 Y 轴共用，数字太大时缩写（k/M）
+  const METRIC_UNIT = {
+    llm_calls:       { label: 'LLM 调用',  unit: '次'  },
+    llm_tokens:      { label: 'Token 消耗', unit: '个'  },
+    llm_cost:        { label: '成本',       unit: '$'   },
+    avg_latency_ms:  { label: '平均延迟',   unit: 'ms'  },
+    p95_latency_ms:  { label: 'P95 延迟',   unit: 'ms'  },
+    success_rate:    { label: '成功率',     unit: '%'   },
+  };
+  const mu = METRIC_UNIT[metric] || { label: metric, unit: '' };
+  const fmtAxis = (v) => {
+    if (isCost) {
+      if (!v || v <= 0) return '0';
+      if (v >= 1) return '$' + v.toFixed(2);
+      // 小数成本取 2 位有效数字去尾零：$0.0083 而非 $0.008340
+      return '$' + Number(v.toPrecision(2));
+    }
+    if (v >= 1000000) return (v / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (v >= 10000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(v).toLocaleString();
+  };
+
+  _trendChart = initEChart('trendChart');
+  if (!_trendChart) return;
+  _trendChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: C.tooltipBg, borderColor: C.tooltipBorder, borderWidth: 1,
+      textStyle: { color: cssVar('--text', '#f1f5f9'), fontSize: 15 },
+      formatter: (params) => {
+        const p = params[0];
+        let v = p.value;
+        if (isCost) v = fmtCost(v);
+        else if (isMs) v = Math.round(v).toLocaleString() + ' ms';
+        else if (isPct) v = Math.round(v) + '%';
+        else v = Math.round(v).toLocaleString() + ' 个';
+        return `${p.axisValue}<br/>${p.marker} ${mu.label}: <strong>${v}</strong>`;
+      }
+    },
+    grid: { left: 62, right: 20, top: 34, bottom: 35 },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLine: { lineStyle: { color: C.gridColor } },
+      axisLabel: { color: C.textColor, fontSize: 12 },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value', min: 0,
+      minInterval: isCost ? null : 1,  // 非成本指标刻度取整，避免 0 值序列出现 1,1,1,0,0,0 假刻度
+      name: mu.unit,
+      nameTextStyle: { color: C.textColor, fontSize: 12, padding: [0, 0, 0, -30] },
+      axisLine: { show: false },
+      axisLabel: { color: C.textColor, fontSize: 12, formatter: (v) => isCost ? fmtAxis(v) : (isMs || isPct ? Math.round(v).toLocaleString() : fmtAxis(v)) },
+      splitLine: { lineStyle: { color: C.gridColor } },
+    },
+    series: [{
+      name: mu.label,
+      type: 'line', smooth: true, symbol: 'circle', symbolSize: 5, data: values,
+      lineStyle: { color: C.frontend, width: 2 },
+      itemStyle: { color: C.frontend },
+      areaStyle: { color: {
+        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [
+          { offset: 0, color: 'rgba(34,211,238,0.22)' },
+          { offset: 1, color: 'rgba(34,211,238,0.02)' }
+        ]
+      } },
+    }]
+  });
+}
+
+// ═══════════════════════════ 行为闭环 Tab ═══════════════════════════
+async function loadBehaviorTab() {
+  const [b7, bt] = await Promise.all([
+    req('/api/stats/behavior?days=7'),
+    req('/api/stats/behavior/trends?days=7')
+  ]);
+  renderRouteDist(b7);
+  renderQuality(b7);
+  renderTaskTable(b7.recent_tasks || []);
+  renderBehaviorChart(bt.days || []);
+}
+
+function renderRouteDist(b) {
+  const box = document.getElementById('routeDist');
+  if (!b.total_messages) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">🧭</div><div class="empty-text">近 7 天暂无消息</div></div>';
+    return;
+  }
+  let html = `<table class="trace-table">
+    <tr><th>这句话的去向</th><th>句数</th><th>占比</th><th>用户看到</th></tr>`;
+  const thenMap = {
+    'direct_answer': '一段直接回答（秒回）',
+    'route_to_clarify': '一个澄清式追问',
+    'route_to_help': '能力自我介绍',
+    'route_to_giveup': '「没有对应工具」的诚实告知',
+  };
+  b.route_outcomes.forEach(r => {
+    const isAgent = !thenMap[r.key];
+    html += `<tr>
+      <td><strong>${esc(r.label)}</strong></td>
+      <td>${r.count}</td>
+      <td class="text-dim">${Math.round(r.count * 100 / b.total_messages)}%</td>
+      <td class="text-dim">${esc(isAgent ? '回执「正在交给 ' + esc(r.label) + '」→ 正式回复' : (thenMap[r.key] || ''))}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  html += `<div class="charts-note">共 ${b.total_messages} 句 · 平均等待 ${fmtSec(b.avg_duration_ms)} · 门禁拦截 ${b.gate_blocked} 次 · 降级自答 ${b.demoted} 次</div>`;
+  box.innerHTML = html;
+}
+
+function renderQuality(b) {
+  const box = document.getElementById('qualityBox');
+  const items = [
+    { num: b.replied, label: '正常回复（success）', cls: '' },
+    { num: b.errors, label: '异常（处理失败，用户会看到致歉）', cls: b.errors ? 'bad' : '' },
+    { num: b.gate_blocked, label: '执行失败 → 结构化门禁如实告知', cls: 'warn' },
+    { num: b.clarified, label: '反问澄清（不确定就追问，不乱猜）', cls: '' },
+    { num: b.negative_feedback, label: '用户负反馈（回复后说「不对/重新答」）', cls: b.negative_feedback ? 'bad' : '' },
+  ];
+  box.innerHTML = `<div class="guard-facts">` + items.map(i => `
+    <div class="guard-fact"><div class="f-num ${i.cls}">${i.num}</div><div class="f-label">${esc(i.label)}</div></div>
+  `).join('') + `</div>
+  <div class="charts-note">兜底承诺：回复 / 澄清 / 诚实告知 三选一必达；异常不会静默吞掉。</div>`;
+}
+
+function renderTaskTable(tasks) {
+  const box = document.getElementById('taskTable');
+  if (!tasks.length) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">暂无任务档案</div></div>';
+    return;
+  }
+  let html = `<table class="trace-table">
+    <tr><th>时间</th><th>用户说</th><th>去向（路由链）</th><th>状态</th><th>等待</th><th>[用户看到]</th></tr>`;
+  tasks.slice(0, 30).forEach(t => {
+    const chips = (t.route_labels || []).map((l, i) =>
+      `<span class="route-chip${i === 0 ? ' first' : ''}">${esc(l)}</span>`).join('');
+    html += `<tr style="cursor:pointer;" onclick="openTrace('${esc(t.task_id)}')">
+      <td class="text-dim" style="white-space:nowrap;">${esc(fmtTime(t.ts))}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;" title="${esc(t.query)}">${esc(t.query)}</td>
+      <td>${chips || '<span class="text-dim">-</span>'}${t.gate_blocked ? `<span class="route-chip" style="border-color:var(--cloud-stroke);color:var(--cloud-stroke);">门禁拦截</span>` : ''}</td>
+      <td>${statusPill(t.status)}</td>
+      <td class="mono">${fmtSec(t.duration_ms)}</td>
+      <td class="text-dim" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;" title="${esc(t.response_preview)}">${esc(t.response_preview || (t.clarify_question ? '反问：' + t.clarify_question : '-'))}</td>
+    </tr>`;
+  });
+  box.innerHTML = html + '</table>';
+}
+
+function renderBehaviorChart(days) {
+  if (_behaviorChart) { _behaviorChart.dispose(); _behaviorChart = null; }
+  if (!days.length) {
+    document.getElementById('behaviorChart').innerHTML = '<div class="empty-state" style="padding:50px 16px"><div class="empty-icon">📊</div><div class="empty-text">暂无行为数据</div></div>';
+    return;
+  }
+  const C = chartBase();
+  const labels = days.map(d => d.date.slice(5));
+  _behaviorChart = initEChart('behaviorChart');
+  if (!_behaviorChart) return;
+  _behaviorChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: C.tooltipBg, borderColor: C.tooltipBorder, borderWidth: 1,
+      textStyle: { color: cssVar('--text', '#f1f5f9'), fontSize: 15 },
+    },
+    legend: {
+      data: ['直接自答', '专业助手', '反问澄清', '能力介绍', '异常'],
+      textStyle: { color: C.textColor, fontSize: 12 }, bottom: 0,
+    },
+    grid: { left: 50, right: 20, top: 25, bottom: 42 },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLine: { lineStyle: { color: C.gridColor } },
+      axisLabel: { color: C.textColor, fontSize: 12 },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value', min: 0,
+      axisLine: { show: false },
+      axisLabel: { color: C.textColor, fontSize: 12 },
+      splitLine: { lineStyle: { color: C.gridColor } },
+    },
+    series: [
+      { name: '直接自答', type: 'bar', stack: 'behavior', data: days.map(d => d.direct_answered), itemStyle: { color: C.backend } },
+      { name: '专业助手', type: 'bar', stack: 'behavior', data: days.map(d => d.routed_to_agent), itemStyle: { color: C.cloud } },
+      { name: '反问澄清', type: 'bar', stack: 'behavior', data: days.map(d => d.clarified), itemStyle: { color: C.frontend } },
+      { name: '能力介绍', type: 'bar', stack: 'behavior', data: days.map(d => d.helped), itemStyle: { color: C.purple } },
+      { name: '异常', type: 'bar', stack: 'behavior', data: days.map(d => d.errors), itemStyle: { color: C.rose } },
+    ]
+  });
+}
+
+// ═══════════════════════════ 服务健康 Tab ═══════════════════════════
+async function loadOpsTab() {
+  const [rt, d, sched] = await Promise.all([
+    req('/api/stats/runtime'),
+    _dashboardData ? Promise.resolve(_dashboardData) : req('/api/stats/dashboard'),
+    req('/api/stats/scheduled')
+  ]);
+  if (!_dashboardData) _dashboardData = d;
+  renderScheduled(sched);
+  renderGuard(rt);
+  renderHeartbeat((d.agent_health || {}).agents || {});
+  renderErrors(d.recent_traces || []);
+  loadAgentSwitches();
+  loadCcUsage();
+}
+
+async function loadCcUsage() {
+  const box = document.getElementById('ccUsageBox');
+  try {
+    const c = await req('/api/stats/cc-usage?days=7');
+    if (!c.days || !c.days.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">近 7 天无 Claude Code 转录记录</div></div>';
+      return;
+    }
+    const kpi = (num, label) =>
+      `<div class="kpi"><div class="k-value">${num}</div><div class="k-label">${esc(label)}</div></div>`;
+    const rows = c.days.slice().reverse().map(x => `<tr>
+      <td style="white-space:nowrap;">${esc(x.date)}</td>
+      <td>${x.calls}</td>
+      <td>${fmtTokens(x.input_tokens)}</td>
+      <td>${fmtTokens(x.output_tokens)}</td>
+      <td>${fmtTokens(x.cache_read_tokens)}</td>
+      <td class="mono">${fmtCost(x.cost_usd)}</td>
+    </tr>`).join('');
+    box.innerHTML =
+      `<div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin:0.2rem 0 0.6rem;">` +
+      kpi(fmtCost(c.total_cost_usd), '7天费用') +
+      kpi(c.total_calls, 'API 调用') +
+      kpi(fmtTokens(c.total_input_tokens), '输入 tokens') +
+      kpi(fmtTokens(c.total_output_tokens), '输出 tokens') +
+      kpi(fmtPct(c.total_input_tokens ? c.total_cache_read_tokens / c.total_input_tokens : 0), '缓存命中') +
+      `</div><div style="overflow-x:auto;"><table class="trace-table"><thead><tr>
+      <th>日期</th><th>调用</th><th>输入</th><th>输出</th><th>缓存读</th><th>成本</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="font-size:0.62rem;color:var(--text-dim);margin-top:0.4rem;">模型 ${esc(c.model)} · 定价按 aigw 官方页 · 转录文件 ${c.scanned_files + c.cached_files} 个（本次新扫 ${c.scanned_files}）</div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">加载失败: ${esc(e.message || e)}</div></div>`;
+  }
+}
+
+function renderScheduled(s) {
+  const kpiBox = document.getElementById('scheduledKpis');
+  const listBox = document.getElementById('scheduledList');
+  const runBox = document.getElementById('scheduledRuns');
+  const kpi = (num, label, warn) =>
+    `<div class="kpi"><div class="k-value"${warn ? ' style="color:var(--cloud-stroke);"' : ''}>${num}</div><div class="k-label">${esc(label)}</div></div>`;
+  kpiBox.innerHTML =
+    kpi(s.kpi_active, '调度中') +
+    kpi(s.kpi_paused, '已暂停', s.kpi_paused > 0) +
+    kpi(s.kpi_pending, '待审批', s.kpi_pending > 0) +
+    kpi(s.kpi_runs_today, '今日执行') +
+    kpi(s.kpi_fail_today, '今日失败', s.kpi_fail_today > 0) +
+    kpi(s.kpi_next_run_at || '-', '下次触发');
+  const tasks = s.tasks || [];
+  if (!tasks.length) {
+    listBox.innerHTML = '<div class="empty-state"><div class="empty-icon">⏰</div><div class="empty-text">还没有定时任务 — 对机器人说「每天 9 点把日报发到本群」即可创建（L2 审批后生效）</div></div>';
+  } else {
+    listBox.innerHTML = `<div style="overflow-x:auto;"><table class="trace-table"><thead><tr>
+      <th>任务</th><th>状态</th><th>调度</th><th>目标</th><th>创建人</th><th>执行</th><th>下次</th></tr></thead><tbody>` +
+      tasks.map(t => `<tr>
+        <td title="${esc(t.instruction)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.task_id)}<div style="font-size:0.62rem;color:var(--text-muted);">${esc(t.instruction)}</div></td>
+        <td>${schedStatusPill(t.status, t.last_run_ok)}</td>
+        <td>${esc(t.schedule)}<div style="font-size:0.62rem;color:var(--text-muted);">${esc(t.agent)}</div></td>
+        <td>${esc(t.target_name || '-')}</td>
+        <td>${esc(t.creator_name || '-')}</td>
+        <td>${t.run_count || 0} 次${t.last_run_at ? `<div style="font-size:0.62rem;color:var(--text-muted);">${esc(t.last_run_at)}</div>` : ''}${t.last_error ? `<div style="font-size:0.62rem;color:var(--danger,#f66);">${esc(t.last_error)}</div>` : ''}</td>
+        <td>${esc(t.next_run_at || '-')}</td>
+      </tr>`).join('') + '</tbody></table></div>';
+  }
+  const runs = s.recent_runs || [];
+  if (!runs.length) {
+    runBox.innerHTML = '<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-text">暂无执行记录</div></div>';
+  } else {
+    runBox.innerHTML = `<div style="overflow-x:auto;max-height:260px;overflow-y:auto;"><table class="trace-table"><thead><tr>
+      <th>时间</th><th>任务</th><th>结果</th><th>耗时</th><th>说明</th></tr></thead><tbody>` +
+      runs.map(r => `<tr>
+        <td style="white-space:nowrap;">${esc(r.started_at)}</td>
+        <td title="${esc(r.instruction)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.task_id)}</td>
+        <td>${r.outcome === 'ok'
+            ? '<span class="pill success">✓ 成功</span>'
+            : '<span class="pill error">✗ 失败</span>'}</td>
+        <td>${fmtMs(r.duration_ms)}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.error || '')}</td>
+      </tr>`).join('') + '</tbody></table></div>';
+  }
+}
+function schedStatusPill(st, lastOk) {
+  const cls = { '调度中': 'success', '待审批': 'warn', '已暂停': 'neutral', '已驳回': 'error', '已过期': 'neutral', '已取消': 'neutral' }[st] || 'neutral';
+  const suffix = (st === '调度中' && lastOk === false) ? ' ⚠最近失败' : '';
+  return `<span class="pill ${cls}">${esc(st)}${suffix}</span>`;
+}
+
+function renderGuard(rt) {
+  const box = document.getElementById('guardBox');
+  if (!rt.guard_enabled) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">🚦</div><div class="empty-text">运行时护栏未启用（[projects.runtime_guard] enabled=false）</div></div>';
+    return;
+  }
+  const running = rt.active_running || 0;
+  const pct = rt.max_concurrent > 0 ? Math.min(100, Math.round(running * 100 / rt.max_concurrent)) : 0;
+  const oc = rt.outcomes || {};
+  const rejected = (oc['busy_rejected'] || 0) + (oc['queue_timeout'] || 0);
+  box.innerHTML = `
+    <div class="guard-gauge">
+      <span class="g-num">${running}</span><span class="g-den">/ ${rt.max_concurrent}</span>
+      <span class="g-label">正在执行 · 回执口径「正在处理」</span>
+    </div>
+    <div class="guard-bar"><span style="width:${pct}%"></span></div>
+    <div class="guard-facts">
+      <div class="guard-fact"><div class="f-num ${rt.experienced_queue ? 'warn' : ''}">${rt.experienced_queue}</div><div class="f-label">经历过「正在排队处理」的任务</div></div>
+      <div class="guard-fact"><div class="f-num">${oc['replied'] || 0}</div><div class="f-label">正常完成</div></div>
+      <div class="guard-fact"><div class="f-num ${rejected ? 'bad' : ''}">${rejected}</div><div class="f-label">被拒/超时（用户看到「系统繁忙」）</div></div>
+      <div class="guard-fact"><div class="f-num">${rt.max_queue}</div><div class="f-label">队列上限 · 超时 ${rt.queue_timeout_sec}s</div></div>
+    </div>
+    ${rt.interrupted && rt.interrupted.length ? `
+    <div class="interrupt-banner">
+      <div class="ib-title"><strong>⚠ 中断待补</strong>（服务重启时遗留，已/将主动飞书提醒用户重新发送）</div>
+      ${rt.interrupted.map(r => `<div>• ${esc(r.query_preview || '（内容未留存）')} · ${esc(r.sender_name)} · ${esc(fmtTime(r.updated_at))}</div>`).join('')}
+    </div>` : ''}`;
+}
+
+function renderHeartbeat(agents) {
+  const box = document.getElementById('heartbeatStatus');
+  const keys = Object.keys(agents);
+  if (!keys.length) {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-text">暂无心跳数据</div></div>';
+    return;
+  }
+  box.innerHTML = `<table class="trace-table">
+    <tr><th>助手</th><th>状态</th><th>探测延迟</th><th>连续失败</th><th>详情</th></tr>
+    ${keys.map(name => {
+      const a = agents[name] || {};
+      const st = a.status || 'unknown';
+      const stClass = st === 'green' ? 'text-green' : st === 'yellow' ? 'text-yellow' : st === 'red' ? 'text-red' : 'text-dim';
+      return `<tr>
+        <td><strong>${esc(agentLabel(name))}</strong> <span class="text-dim mono">${esc(name)}</span></td>
+        <td class="${stClass}"><strong>${esc(st)}</strong></td>
+        <td class="mono">${a.duration_ms ? Math.round(a.duration_ms) + 'ms' : '-'}</td>
+        <td>${a.consecutive_failures || 0}</td>
+        <td class="text-dim">${esc(a.detail || '')}</td>
+      </tr>`;
+    }).join('')}
+  </table>`;
+}
+
+function renderErrors(traces) {
+  const box = document.getElementById('errorList');
+  const errors = traces.filter(t => t.status === 'error');
+  if (errors.length) {
+    box.innerHTML = errors.map(t => `
+      <div class="trace-item" onclick="openTrace('${esc(t.trace_id)}')">
+        <span class="pill error">✗ 异常</span>
+        <span class="t-query">${esc(agentLabel(t.agent))}</span>
+        <span class="t-route">Trace: ${esc(t.trace_id)}</span>
+        <span class="t-meta">${fmtSec(t.duration_ms)}</span>
+      </div>`).join('');
+  } else {
+    box.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">近期无异常</div></div>';
+  }
+}
+
+// ═══════════════════════════ Trace Detail ═══════════════════════════
+async function openTrace(traceId) {
+  if (!traceId) return;
+  const overlay = document.getElementById('traceOverlay');
+  overlay.style.display = 'block';
+  document.getElementById('traceTitle').textContent = '全链路 · ' + traceId;
+  document.getElementById('traceDetail').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">加载中…</div></div>';
+  try {
+    const tr = await req('/api/stats/trace/' + encodeURIComponent(traceId));
+    const C = chartBase();
+    let html = `<table class="trace-table">
+      <tr><th>环节（助手）</th><th>模型</th><th>状态</th><th>耗时</th><th>Token (入/出)</th><th>缓存命中</th><th>时间</th></tr>`;
+    (tr.steps || []).forEach(s => {
+      html += `<tr>
+        <td><strong>${esc(agentLabel(s.agent))}</strong> <span class="text-dim mono">${esc(s.agent)}</span></td>
+        <td class="mono">${esc(s.model || '-')}</td>
+        <td>${statusPill(s.status)}</td>
+        <td class="mono">${s.latency_ms}ms</td>
+        <td class="mono">${s.tokens_in} / ${s.tokens_out}</td>
+        <td>${s.cache_hit_rate ? fmtPct(s.cache_hit_rate) : '-'}</td>
+        <td class="text-dim">${esc(fmtTime(s.timestamp))}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    html += `<div class="charts-note" style="margin-top:0.6rem;">
+      全链耗时 <strong style="color:var(--text)">${tr.total_latency_ms} ms</strong> ·
+      Token <strong style="color:var(--text)">${fmtTokens(tr.total_tokens)}</strong> ·
+      成本 <strong style="color:var(--text)">${fmtCost(tr.total_cost)}</strong> ·
+      平均缓存命中 <strong style="color:var(--text)">${tr.avg_cache_hit_rate ? fmtPct(tr.avg_cache_hit_rate) : '-'}</strong>
+    </div>`;
+    document.getElementById('traceDetail').innerHTML = html;
+  } catch(e) {
+    document.getElementById('traceDetail').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${esc(e.message)}</div></div>`;
+  }
+}
+function closeTrace() { document.getElementById('traceOverlay').style.display = 'none'; }
+
+// ═══════════════════════════ 用户 Tab ═══════════════════════════
+async function loadUserStats() {
+  const days = document.getElementById('userDays').value;
+  const box = document.getElementById('userList');
+  box.innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">加载中…</div></div>';
+  try {
+    const data = await req('/api/stats/users?days=' + days);
+    document.getElementById('userSummary').textContent = `${data.total_users} 位用户 · ${data.total_calls} 次调用`;
+    if (!data.users || !data.users.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">暂无用户数据</div></div>';
+      return;
+    }
+    let html = `<table class="trace-table">
+      <tr><th>用户</th><th>调用</th><th>会话</th><th>成功率</th><th>Token</th><th>成本</th><th>最近活跃</th><th>最近查询</th><th></th></tr>`;
+    data.users.forEach(u => {
+      const stClass = u.success_rate >= 0.9 ? 'text-green' : u.success_rate >= 0.7 ? 'text-yellow' : 'text-red';
+      const name = u.sender_name || u.sender_id.slice(0, 16);
+      const lastActive = u.last_active ? fmtTime(u.last_active) : '-';
+      const recent = u.recent_queries && u.recent_queries.length
+        ? u.recent_queries.slice(0, 2).map(q => esc(q)).join('<br>') : '-';
+      html += `<tr>
+        <td><strong>${esc(name)}</strong></td>
+        <td>${u.total_calls}</td>
+        <td>${u.chat_count}</td>
+        <td class="${stClass}"><strong>${fmtPct(u.success_rate)}</strong></td>
+        <td class="mono">${fmtTokens(u.total_tokens)}</td>
+        <td class="mono">${fmtCost(u.total_cost)}</td>
+        <td class="text-dim" style="font-size:0.62rem;">${lastActive}</td>
+        <td class="text-dim" style="font-size:0.62rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;">${recent}</td>
+        <td><span class="close-btn" onclick="openUserDetail('${esc(u.sender_id)}')">详情</span></td>
+      </tr>`;
+    });
+    box.innerHTML = html + '</table>';
+  } catch(e) {
+    box.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">加载失败: ${esc(e.message)}</div></div>`;
+  }
+}
+
+async function openUserDetail(senderId) {
+  const overlay = document.getElementById('userOverlay');
+  overlay.style.display = 'block';
+  document.getElementById('userDetailTitle').textContent = '用户详情 · ' + senderId.slice(0, 16);
+  document.getElementById('userDetailContent').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">加载中…</div></div>';
+  try {
+    const days = document.getElementById('userDays').value;
+    const data = await req('/api/stats/users/' + encodeURIComponent(senderId) + '?days=' + days);
+    const u = data.user;
+    const name = u.sender_name || u.sender_id.slice(0, 16);
+    const srClass = u.success_rate >= 0.9 ? 'text-green' : u.success_rate >= 0.7 ? 'text-yellow' : 'text-red';
+
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.6rem;">
+      <div><strong style="font-size:0.95rem;">${esc(name)}</strong>
+        <span class="mono text-dim" style="margin-left:0.5rem;">${esc(u.sender_id)}</span></div>
+      <div><span class="pill neutral">${u.total_calls} 次调用</span>
+        <span class="pill neutral">${u.chat_count} 个会话</span>
+        <span class="pill ${u.error_count > 0 ? 'error' : 'success'}">${u.error_count} 次错误</span></div>
+    </div>
+    <div style="display:flex;gap:1.2rem;margin-bottom:0.8rem;font-size:0.68rem;color:var(--text-muted);flex-wrap:wrap;">
+      <span>首次使用: ${u.first_seen ? fmtTime(u.first_seen) : '-'}</span>
+      <span>最近活跃: ${u.last_active ? fmtTime(u.last_active) : '-'}</span>
+      <span>成功率: <strong class="${srClass}">${fmtPct(u.success_rate)}</strong></span>
+      <span>Token: <strong>${fmtTokens(u.total_tokens)}</strong></span>
+      <span>成本: <strong>${fmtCost(u.total_cost)}</strong></span>
+    </div>`;
+
+    if (data.traces && data.traces.length) {
+      html += `<table class="trace-table">
+        <tr><th>时间</th><th>助手</th><th>状态</th><th>耗时</th><th>Token</th><th>输入</th><th>输出（摘要）</th></tr>`;
+      data.traces.forEach(t => {
+        html += `<tr>
+          <td class="text-dim" style="font-size:0.62rem;white-space:nowrap;">${fmtTime(t.timestamp)}</td>
+          <td><strong>${esc(agentLabel(t.agent))}</strong></td>
+          <td>${statusPill(t.status)}</td>
+          <td class="mono">${fmtSec(t.duration_ms)}</td>
+          <td class="mono">${fmtTokens(t.tokens)}</td>
+          <td class="text-dim" style="font-size:0.62rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;" title="${esc(t.input_text)}">${esc(t.input_text.slice(0, 40))}</td>
+          <td class="text-dim" style="font-size:0.62rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${esc(t.output_text)}">${esc(t.output_text.slice(0, 50))}</td>
+        </tr>`;
+      });
+      html += '</table>';
+    } else {
+      html += '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">暂无对话记录</div></div>';
+    }
+    document.getElementById('userDetailContent').innerHTML = html;
+  } catch(e) {
+    document.getElementById('userDetailContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">加载失败: ${esc(e.message)}</div></div>`;
+  }
+}
+function closeUserDetail() { document.getElementById('userOverlay').style.display = 'none'; }
+
+// ═══════════════════════════ Init / Refresh ═══════════════════════════
+async function refreshAll() {
+  try {
+    await Promise.all([loadDashboard(), loadTrendChart()]);
+    document.getElementById('footerTime').textContent = '刷新于 ' + new Date().toLocaleString('zh-CN');
+  } catch(e) {
+    document.getElementById('subtitle').textContent = '⚠️ 加载失败: ' + e.message;
+  }
+}
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    _trendChart && _trendChart.resize();
+    _behaviorChart && _behaviorChart.resize();
+  }, 200);
+});
+refreshAll();
+setInterval(refreshAll, 60000);
+// 支持 #tabXxx 直达（分享/验收定位用），如 http://host:9112/#tabOps
+const _hashTab = location.hash.slice(1);
+if (_hashTab && document.getElementById(_hashTab)) switchTab(_hashTab);
+// 支持 ?metric=llm_cost 直达某趋势指标（分享/验收用）
+const _metricParam = new URLSearchParams(location.search).get('metric');
+if (_metricParam) {
+  const sel = document.getElementById('trendMetric');
+  if (sel && [...sel.options].some(o => o.value === _metricParam)) {
+    sel.value = _metricParam;
+    renderTrendChart();
+  }
+}
+</script>
+</body>
+</html>

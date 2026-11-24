@@ -1,0 +1,43 @@
+# ── Core ──
+openai>=1.0.0
+httpx>=0.27.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# ── LangGraph 编排层 ──
+langgraph>=0.2.0
+
+# ── 飞书 Channel SDK ──
+lark-channel>=0.1.0
+
+# ── Token 估算（可选，无此依赖降级为字符估算） ──
+tiktoken>=0.5.0
+
+# ── Dashboard HTTP Server ──
+fastapi>=0.115.0
+uvicorn>=0.32.0
+
+# ── 文档解析（multimodal 附件→文本）──
+# 工单引擎（order-sql）已随 v3.0.0 迁出为独立 A2A 服务 webportal-order-agent，
+# sqlparse/pymupdf 是引擎依赖，随引擎移出
+pypdf>=4.0
+python-docx>=1.1          # .docx（段落 + 表格）
+openpyxl>=3.1             # .xlsx / .xlsm
+xlrd>=2.0                 # .xls（BIFF，openpyxl 不认老格式）
+python-pptx>=1.0          # .pptx（按页抽标题/正文/表格/备注）
+odfpy>=1.4                # .odt / .ods / .odp
+extract-msg>=0.41         # .msg（Outlook 邮件）
+charset-normalizer>=3.0   # 文本编码探测（utf-8/gbk 之外的中文文件）
+beautifulsoup4>=4.12      # .html 表格转文本（缺失时退化为正则粗剥）
+Pillow>=10.0              # 图片等比缩小（超长边缩到 2048px，省 image token）
+# .doc / .rtf：.rtf 本地解析，.doc 依赖系统 antiword（Git for Windows 自带），
+# 均无 Python 依赖；antiword 缺失时报错会提示另存为 .docx
+
+# ── digital-oracle 引擎（bot/skills/digital-oracle，数字先知概率预测 Agent）──
+# 12/13 provider 零依赖（stdlib urllib）；仅期权链/价格历史用 yfinance
+yfinance>=0.2.40
+
+# ── 开发门禁（ruff 静态检查 + mypy 增量类型检查，见 python-dev-guard skill）──
+ruff>=0.16
+mypy>=1.18

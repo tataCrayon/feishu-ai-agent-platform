@@ -1,0 +1,30 @@
+# feishu-agent-platform 业务能力技能白名单 —— deploy/dsh/sync_skills.py 消费。
+#
+# 收录判据：技能本身是一个「可路由的业务能力」（用户会说"帮我做 X"），
+# 用作路由候选集，不是工具技巧。工具型技能放进来会与业务 agent 抢路由。
+#
+# 已下线（2026-11-05，产品决定），别再往里加回：
+#   db-agent            数据库查询（不通过飞书查 MySQL）
+#   deploy-agent        发布管理
+#   config-agent        Nacos 配置
+#   daily-agent         技术日报（与 aihot 重叠，资讯统一由 aihot 承接）
+#   merge-check-agent   分支合并检查
+#   elk-log-query       ELK 日志检索
+#   news-sql-generator  新闻稿转官网 SQL
+
+aihot                  # AI 资讯 / 日报 / 热点（唯一资讯入口）
+
+# 以下由 sync_skills.py 从 bot/agents/*/agent.yaml 的 description 生成：
+webportal-agent
+schedule-agent
+digital-oracle-agent
+cmdb-watch-agent      # CMDB 生产工单提醒：按姓名订阅 / 按单号盯整单
+prd-watch-agent       # easyprd PRD 变更助手：查监听状态 / 整理群讨论进 PRD
+pm-hub-agent          # PM 工作台：SOP 闸门雷达 / 日计划写入 / 会议行动项 / 人天估算
+prd-review
+
+# PRD 评审判定 Skill（prd-review 入口会引用，但执行面要能直接载入标准）
+prd-consistency       # 单一事实源/术语/枚举/状态机
+prd-executability     # 流程/字段精度/边界并发/权限审计
+prd-acceptance        # 验收可测 + 待确认归零
+prd-evidence          # 代码/契约/会议证据对照

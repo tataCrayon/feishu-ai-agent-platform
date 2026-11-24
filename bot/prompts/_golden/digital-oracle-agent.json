@@ -1,0 +1,49 @@
+{
+  "ref": "agents/digital-oracle-agent.md",
+  "version": "1.0.0",
+  "description": "数字先知（digital-oracle-agent）golden 套件 — 概率预测/市场信号域",
+  "cases": [
+    {
+      "input": "WW3 发生的概率有多大？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 选 ≥3 个独立信号（polymarket/geopolitics + 避险资产 + CFTC），输出结构化概率报告",
+      "expected": "预测市场概率 + 避险资产 + 机构持仓交叉验证，多层信号表格 + 情景分析",
+      "tags": ["digital-oracle", "geopolitics"]
+    },
+    {
+      "input": "现在适合买黄金吗？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 拉价格历史 + CFTC 持仓 + 恐贪指数，按时间尺度分层给方向判断",
+      "expected": "只用交易数据不给观点，信号标注时间尺度",
+      "tags": ["digital-oracle", "gold"]
+    },
+    {
+      "input": "美联储下次会议降息的概率是多少？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 用 kalshi KXFED 系列合约 + 收益率曲线 + bis_rates 政策利率",
+      "expected": "预测市场直接定价 + 利率曲线佐证",
+      "tags": ["digital-oracle", "fed"]
+    },
+    {
+      "input": "AI 是不是泡沫？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 拉行业龙头价格 + 期权 IV + EDGAR 内部人交易 + 机构持仓",
+      "expected": "多维度泡沫信号（估值/波动/内部人卖出）交叉验证",
+      "tags": ["digital-oracle", "bubble"]
+    },
+    {
+      "input": "600519 最近主力资金在流入还是流出？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 用 eastmoney_fund_flow（主力 vs 散户）+ eastmoney_quote，A股无预测市场需说明",
+      "expected": "A股个股走东财资金流，概率类问题说明只能从资金流+波动率推",
+      "tags": ["digital-oracle", "a-share"]
+    },
+    {
+      "input": "比特币还会涨吗？",
+      "expected_tool": "route_to_digital_oracle_agent",
+      "expected_behavior": "gather_signals 用 coingecko + deribit 期限结构/期权 IV + polymarket 事件合约",
+      "expected": "加密原生数据源（市值/期限结构/IV）+ 预测市场",
+      "tags": ["digital-oracle", "crypto"]
+    }
+  ]
+}

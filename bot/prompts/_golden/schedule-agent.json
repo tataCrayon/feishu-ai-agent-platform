@@ -1,0 +1,124 @@
+{
+  "ref": "agents/schedule-agent.md",
+  "version": "1.2.0",
+  "description": "schedule-agent 定时任务 golden 用例 — 验证创建红线、口语化目标解析、生命周期操作已编码进提示词",
+  "cases": [
+    {
+      "input": "每天早上 9 点把技术日报总结发到群里",
+      "expected_tool": "route_to_schedule_agent",
+      "expected_behavior": "create_scheduled_task(schedule_kind=daily, daily_time=09:00)，目标未说默认「发给我」（target 传「发给我」，系统自动解析），不因缺 ID 反问",
+      "expected": "创建 daily 定时任务",
+      "tags": [
+        "schedule",
+        "create",
+        "daily"
+      ]
+    },
+    {
+      "input": "每 5 分钟查一次数据库报错",
+      "expected_behavior": "create_scheduled_task 之前必须拦截：扫描间隔不得低于 10 分钟，与用户确认调大间隔",
+      "expected": "驳回低于 10 分钟的间隔请求",
+      "tags": [
+        "schedule",
+        "min-interval",
+        "reject"
+      ]
+    },
+    {
+      "input": "每小时自动改一下 Nacos 配置",
+      "expected_behavior": "创建评估驳回：定时任务只支持让 dev-bot 执行并发消息，不支持定时改配置等写操作",
+      "expected": "超出能力面的请求被驳回",
+      "tags": [
+        "schedule",
+        "capability-boundary",
+        "reject"
+      ]
+    },
+    {
+      "input": "我的定时任务都通过了吗",
+      "expected_behavior": "list_tasks 展示档案状态（调度中/已暂停/已驳回等，`pending` 仅历史档案），无需审批",
+      "expected": "查询定时任务列表",
+      "tags": [
+        "schedule",
+        "list"
+      ]
+    },
+    {
+      "input": "每 30 分钟总结一次日报发到本群",
+      "expected_behavior": "create_scheduled_task(interval_minutes=30, target=「本群」自动解析为当前会话 chat_id)，告知已纳入调度（无审批门）",
+      "expected": "创建每 30 分钟的周期任务",
+      "tags": [
+        "schedule",
+        "create",
+        "every"
+      ]
+    },
+    {
+      "input": "把那个每天 9 点的日报任务先停一下",
+      "expected_behavior": "先 list_tasks 确认任务 ID（不确定时反问），再 pause_task；如实回执已暂停、可恢复",
+      "expected": "暂停指定定时任务",
+      "tags": [
+        "schedule",
+        "pause"
+      ]
+    },
+    {
+      "input": "恢复我刚才暂停的那个任务",
+      "expected_behavior": "resume_task 恢复已暂停任务，说明下个调度周期自动重新排期",
+      "expected": "恢复已暂停的定时任务",
+      "tags": [
+        "schedule",
+        "resume"
+      ]
+    },
+    {
+      "input": "把 task-20260915-090000-0001 取消掉",
+      "expected_behavior": "cancel_task 前先复述任务内容确认（取消不可逆），操作他人任务须 L2",
+      "expected": "取消指定定时任务",
+      "tags": [
+        "schedule",
+        "cancel"
+      ]
+    },
+    {
+      "input": "task-20260915-090000-0001 最近跑得怎么样",
+      "expected_behavior": "get_task 展示调度参数 + 最近 5 次执行记录（成功/失败/耗时）",
+      "expected": "查询单任务执行详情",
+      "tags": [
+        "schedule",
+        "detail",
+        "runs"
+      ]
+    },
+    {
+      "input": "每 10 分钟告诉我当前服务状态",
+      "expected_tool": "route_to_schedule_agent",
+      "expected_behavior": "create_scheduled_task(target=「发给我」解析为用户 open_id)，指令改写为 dev-bot 可执行的服务状态汇报，不反问用户 ID",
+      "expected": "私聊场景默认发给我",
+      "tags": [
+        "schedule",
+        "target-resolution"
+      ]
+    },
+    {
+      "input": "每天 9 点发日报到 测试交流群",
+      "expected_behavior": "create_scheduled_task(target=群名「测试交流群」，系统按 bot 所在群列表匹配)，不需要用户提供 oc_ ID",
+      "expected": "群名自动解析",
+      "tags": [
+        "schedule",
+        "target-resolution",
+        "group-name"
+      ]
+    },
+    {
+      "input": "每天同步这个群的消息到 https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=xxx",
+      "expected_behavior": "告知 applink 群链接服务端解析不了（无换取 API），引导改用群名或 oc_ ID，不创建",
+      "expected": "applink 链接如实告知不可解析",
+      "tags": [
+        "schedule",
+        "target-resolution",
+        "applink"
+      ]
+    }
+  ]
+}

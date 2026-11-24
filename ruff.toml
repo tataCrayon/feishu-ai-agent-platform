@@ -1,0 +1,46 @@
+# Python 工具链配置（ruff + mypy）
+# 门禁流程见 ~/.agents/skills/python-dev-guard/SKILL.md
+# 全量体检：python -m ruff check app/
+# 真 bug 级拦截：python -m ruff check app/ --select F821,F811,F401,F541,F841
+
+# py311 与运行环境一致
+target-version = "py311"
+
+[lint]
+# 默认规则（E4/E7/E9/F）+ 导入排序 + pyupgrade + 常见瑕疵
+select = [
+    "E4", "E7", "E9",   # pycodestyle 错误（语法/缩进/未定义名的语法层）
+    "F",                # pyflakes（F821 未定义名 / F811 重定义 / F401 未用导入）
+    "I",                # isort 导入排序
+    "UP",               # pyupgrade（py3.11 现代写法）
+    "B",                # flake8-bugbear（常见 bug 模式）
+    "SIM",              # flake8-simplify
+    "RUF",              # ruff 专属（RUF012 可变默认值等）
+]
+ignore = [
+    "E501",    # 行宽不阻断（中文注释普遍超 88）
+    "E741",    # 模糊单字符变量名（l/I）暂不治理
+    "E712",    # == True/False（SQLAlchemy 风格）
+    "SIM105",  # contextlib.suppress 改写（可读性争议）
+    "SIM108",  # 三元改写（可读性争议）
+    "RUF001", "RUF002", "RUF003",  # 中文字符串里的全角标点
+    "RUF005",  # 解包代替拼接（可读性争议）
+    "B008",    # 函数默认参数调用（FastAPI/Dashboard 常见模式）
+]
+
+[lint.per-file-ignores]
+# 测试与脚本放宽
+"tests/*" = ["B011", "SIM117"]
+"app/scripts/*" = ["T201"]
+# digital-oracle 是 vendoring 上游包（komako-workshop/digital-oracle），保持上游原样
+# （工单引擎 order-sql 已于 webportal-agent v3.0.0 迁出为独立 A2A 服务，豁免随包移除）
+"bot/skills/digital-oracle/*" = ["ALL"]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[format]
+# ruff format 配置（可选启用：python -m ruff format <file>）
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

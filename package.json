@@ -1,0 +1,9 @@
+{
+  "name": "feishu-agent-platform-dsh-runtime",
+  "version": "0.2.1-dsh.1",
+  "private": true,
+  "description": "feishu-agent-platform 的 dsh 运行时依赖 — 把执行面引擎钉在本仓，不依赖全局安装",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.5"
+  }
+}

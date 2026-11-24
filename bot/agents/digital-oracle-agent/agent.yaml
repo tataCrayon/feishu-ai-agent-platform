@@ -1,0 +1,26 @@
+# Agent: digital-oracle-agent — 数字先知（市场数据概率预测）
+# 独立配置，不依赖 cc-connect（transport=handler 进程内执行）
+# version: 1.0.0 | updated: 2026-09-24 | author: @devuser
+# tags: [prediction, market-data, probability] | cache_hint: low-frequency
+# changelog: v1.0.0 (2026-09-24) 初始版本 — vendoring komako-workshop/digital-oracle
+#   （MIT）引擎至 bot/skills/digital-oracle/，Handler 进程内调用，不走 cc-connect
+name: digital-oracle-agent
+display_name: "数字先知"
+# 路由级描述（单源：同时用作路由工具 description 与 /help 能力清单）
+description: "数字先知：概率预测与市场信号分析。用户问某事件/趋势的概率、涨跌预测、
+  周期判断（如 WW3 概率、衰退、黄金/比特币走势、A股资金面、美联储加降息、AI 泡沫），
+  或想用预测市场/期权/收益率曲线等交易数据交叉验证观点时使用。只用交易数据不读新闻"
+permission_level: 0
+model: haiku
+enabled: true
+# 观测 success 最长 237s（gather 并行取数 + 渲染），硬上限取 360s（2026-11-02 起被消费）
+timeout_sec: 360
+# 执行通道：进程内 Python Handler（app/agents/handlers/digital_oracle_handler.py），
+# 不走 cc-connect——数据源为公开免费 API，进程内并行拉取即可，无需 Claude Code 会话
+transport: handler
+# 专属领域：抑制其并行 extra_calls（通用 Agent 无本引擎数据源，冗余分派只烧超时）
+exclusive_domain: true
+work_dir: "./bot/agents/digital-oracle-agent"
+# 单一事实源：prompt 从 bot/prompts/agents/digital-oracle-agent.md 加载（PromptLoader）
+prompt_ref: "agents/digital-oracle-agent.md"
+mcp_servers: {}

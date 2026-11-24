@@ -1,0 +1,44 @@
+{
+  "sources": [
+    {
+      "id": "tech_daily",
+      "name": "技术动态日报",
+      "kind": "daily",
+      "cadence": "daily",
+      "path": "daily/技术动态日报",
+      "description": "日更技术动态日报，含 GitHub 热门、大厂动态、AI 新闻等",
+      "match": {
+        "regex": "^(?P<year>\\d{4})年(?P<month>\\d{1,2})月(?P<day>\\d{1,2})日_.*\\.md$",
+        "period_template": "{year}年{month}月{day}日"
+      },
+      "exclude": ["README.md"]
+    },
+    {
+      "id": "trend_tracking",
+      "name": "技术趋势跟踪",
+      "kind": "weekly",
+      "cadence": "weekly",
+      "path": "daily/技术趋势跟踪",
+      "description": "周更趋势跟踪，GitHub 热门仓库周报、AI 与开发者工具趋势等，一周多篇",
+      "match": {
+        "regex": "^(?P<year>\\d{4})年(?P<month>\\d{1,2})月第(?P<week>\\d{1,2})周_.*\\.md$",
+        "period_template": "{year}年{month}月第{week}周"
+      },
+      "exclude": ["README.md"]
+    },
+    {
+      "id": "skill_ranking",
+      "name": "Skill 排行",
+      "kind": "monthly",
+      "cadence": "monthly",
+      "path": "daily/AI Coding/Skill 排行",
+      "description": "月度 Skill 榜单，按 skills.sh 市场安装量分受众排行",
+      "match": {
+        "regex": "^\\d{4}年\\d{1,2}月_.*\\.md$",
+        "period_template": ""
+      },
+      "period_from_heading": true,
+      "exclude": ["README.md"]
+    }
+  ]
+}

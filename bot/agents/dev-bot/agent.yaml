@@ -1,0 +1,23 @@
+# Agent: dev-bot — 主业务 Agent
+# 独立配置，不再依赖 agents.yaml 单文件
+# version: 1.0.0 | updated: 2026-08-15 | author: @devuser
+# tags: [core, business, primary] | cache_hint: high-frequency
+# changelog: v2.0.0 (2026-09-11) 双源漂移整改：弃内联 system_prompt 改 prompt_ref（P1-3，六支柱审查）
+# changelog: v1.1.0 (2026-08-24) 平级化：声明 transport=cc_connect，dev-bot 是普通执行通道之一
+# changelog: v1.0.0 (2026-08-15) 初始版本，支持 [role=xxx] 角色前缀路由
+name: dev-bot
+display_name: "开发助手"
+# 路由级描述（单源：同时用作路由工具 description 与 /help 能力清单）。
+# 平级化后 dev-bot 是 Claude Code 通用业务 Agent，不再标注"兜底"。
+description: "Claude Code 通用开发 Agent：代码搜索/分析、需求分析、飞书操作（文档/日历/审批）、知识资产查询、AI 咨询、代码仓库搜索(/findcode)、记忆(/memories)，以及 Skill 技能执行"
+permission_level: 0
+# Claude Code 执行通道（cc-connect 桥接）— 与 handler/webportal 等通道平级
+transport: cc_connect
+# 不参与 LLM 路由（2026-09-14）：dev-bot 是维护者的远程开发通道（/dev 直达），
+# 不对团队用户开放——团队消息禁止消耗 Claude Code 会话。仍保留 enabled=true：
+# registry/enabled()/健康探测/skill 合成 Agent 的执行分派照常。
+routable: false
+enabled: true
+# 单一事实源：prompt 从 bot/prompts/agents/dev-bot.md 加载（PromptLoader）
+prompt_ref: "agents/dev-bot.md"
+mcp_servers: {}

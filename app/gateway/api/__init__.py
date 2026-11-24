@@ -1,0 +1,1 @@
+"""Dashboard API — FastAPI routes for Agent dashboard."""

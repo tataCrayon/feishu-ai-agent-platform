@@ -1,0 +1,128 @@
+# 忽略 cc-connect 运行时数据
+data/
+.cc-connect/
+
+# 忽略会话和日志
+*.log
+.agent/eval/logs/
+.agent/context/
+logs/agents/
+logs/sessions/
+logs/audit/
+logs/eval/
+logs/daily/
+.agent/eval/token-usage/*.jsonl
+.agent/eval/reports/
+.agent/eval/workflow-changes/
+# 本地 AI 工作流资产（会话记忆 / 知识笔记 / EDD 产物），不入开源仓
+.agent/
+.notes/
+.claude/
+.clawhub/
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+
+# 忽略运行时日志
+logs/edc/
+logs/health/
+
+# 忽略临时文件
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Node
+node_modules/
+.env
+.env.*
+!*.env.example
+
+# order-sql skill 运行时产物
+bot/skills/order-sql/runs/
+
+# 运行时锁文件与临时产物
+.config.toml.lock
+*.lock
+
+# 调试临时 JSON / 测试产物
+approval_*.json
+search_data.json
+todo.md
+nul
+
+# 凭据安全（P0-1 整改）：生成物含明文凭据，不入库（本地保留，python -m app.agents.generator 重建）
+.claude/settings.json
+bot/agents/*/.claude/settings.json
+
+# 能力热插拔档案（原始包+manifest，凭据红线：不上库）
+bot/inbox/
+
+# Claude Code 生成物与参考（源头在 bot/skills/ 与远程）
+.claude/skills/
+.claude/skills-ref/
+
+# 工单目录（业务敏感材料，含客户账户信息，不入库）
+工单/
+logs/
+
+# Skill 合成 Agent 生成物（setup_skills 注入 registry 时生成，源头在 bot/skills/）
+bot/agents/skill-*/
+
+# ZCode 本地会话计划（个人工作区产物，不入库）
+.zcode/
+
+# skill 包发布产物（源头在 bot/skills/）
+*.zip
+
+# Agent 回复全文存档（控制台「报告」tab 数据源，运行时产物）
+logs/task_replies/
+
+# pytest Windows basetemp (scripts/gates 用 --basetemp=logs/.pytest_tmp 之外的默认)
+.pytest_tmp/
+
+# 官网新闻临时工作区（news-sql-generator 的一次性产物：稿件图片/SQL/组装脚本，不入库）
+_news_work/
+
+# 需求草稿笔记（含生产接口日志片段与凭据痕迹，整理为 docs/design/ 后不入库）
+新模块开发计划.md
+
+# dsh 技能目录是白名单同步产物（deploy/dsh/sync_skills.py 生成），源在 bot/skills
+deploy/dsh/agentbiz/skills/
+
+# 豆包等工作流产出的需求草稿（已收编进 docs/design/，本地留档不入库）
+temp/
+
+# archify visual-check 产物（截图/接触面/回执）：每次交付重新生成，只作验收证据
+docs/diagrams/*.visual-check.*
+
+# 飞书表格导出的一次性中间件（Bitable 拉数调试残留）
+tblkl936FD8XnXEQ_*.ndjson
+tblkl936FD8XnXEQ_*.manifest.json
+
+# PM 守护进程的运行态账本（会话原文 / 群聊快照 / 草稿待确认 / 已处理水位）
+# 含真实私聊内容与 open_id，与 logs/ 同级敏感。代码读它们，但绝不入库。
+.threads.jsonl
+.threads_anchors.json
+.watch_state.json
+.watch_snapshot.json
+.watch_pending.json
+.triage_state.json
+.schedule_slots.json
+.daemon_state.json
+.nudge_pending.json
+.sessions.json
+.people_cache.json
+.proactive_state.json
+.followup_intake.json
+.pm_auth_pending.json
+
+# PM 侧原始需求文档（只在本地留档；结论已落 docs/design/ 与功能简报）
+prd/

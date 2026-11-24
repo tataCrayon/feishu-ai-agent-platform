@@ -1,0 +1,21 @@
+# Agent: schedule-agent — 定时任务 Agent
+# 独立配置，不依赖 agents.yaml 单文件
+# version: 1.1.0 | updated: 2026-11-24 | author: @devuser
+# tags: [scheduler, cron, scheduled-task] | cache_hint: low-frequency
+# changelog: v1.1.0 (2026-11-24) 路由描述去掉「需管理员审批」——审批门 2026-11-08 已下线，
+#                              描述是路由期唯一输入，写着审批会让模型对用户说「等审批」;
+#            v1.0.0 (2026-09-14) 初始版本：创建（评估+审批）+ 查询，执行复用现有 Agent 管线
+name: schedule-agent
+display_name: "定时任务 Agent"
+# 路由级描述（单源：同时用作路由工具 description 与 /help 能力清单）
+description: "定时任务：创建定时/周期任务（评估通过即生效，间隔最低 10 分钟）、查看定时任务列表。用户想定期执行某件事、每天定时发消息、周期性提醒或汇总时使用"
+permission_level: 0
+model: haiku
+enabled: true
+timeout_sec: 60
+transport: handler
+exclusive_domain: true
+work_dir: "./bot/agents/schedule-agent"
+# 单一事实源：从 bot/prompts/agents/schedule-agent.md 加载（PromptLoader）
+prompt_ref: "agents/schedule-agent.md"
+mcp_servers: {}
