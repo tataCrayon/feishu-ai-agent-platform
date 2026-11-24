@@ -1,20 +1,20 @@
 ---
 name: help-reply
-version: 2.3.0
+version: 2.4.0
 created: 2026-08-01
-updated: 2026-11-23
+updated: 2026-11-25
 author: '@devuser'
 description: help 帮助清单回复文本（备用模板，运行时由 _help_node 动态生成）
 tags: [reply, help, capabilities]
 cache_hint: low-frequency
 token_estimate: 320
 changelog:
-  - version: 2.3.0
+  - version: 2.4.0
     date: 2026-11-23
     change: 清单里通用业务助手改名「开发助手」，与 agent 更名 dev-bot 同口径
   - version: 2.2.0
     date: 2026-10-07
-    change: 清单新增「案例沉淀」（文档/记录号入库 + 飞书案例库镜像，与动态清单同口径）
+    
   - version: 2.1.0
     date: 2026-09-17
     change: 清单新增「分支合并检查」（merge-check-agent 上线，与 dev-bot 秒回清单同口径）

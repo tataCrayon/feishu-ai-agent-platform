@@ -35,7 +35,7 @@
 
 | 文件 | 版本 | Token | depends_on | 用途 |
 |------|------|-------|------------|------|
-| `replies/help_reply.md` | v2.3.0 | ~320 | — | help 帮助清单回复文本（备用模板，运行时由 _help_node 动态生成） |
+| `replies/help_reply.md` | v2.4.0 | ~320 | — | help 帮助清单回复文本（备用模板，运行时由 _help_node 动态生成） |
 
 ## 公共基座（shared/）
 
