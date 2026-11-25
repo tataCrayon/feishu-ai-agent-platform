@@ -74,10 +74,15 @@
 `diagrams/` 每张图只有两个文件：`.archify.json`（源，单源）与 `.html`（archify deliver 的生成物，
 控制台「架构视图」内嵌）。**不放截图，不放 visual-check 产物**。
 
-| 图 | 控制台入口 |
-|---|---|
-| [feishu-agent-platform-runtime.archify.json](diagrams/feishu-agent-platform-runtime.archify.json) | `/arch/runtime.html` |
-| [feishu-agent-platform-request-lifecycle.archify.json](diagrams/feishu-agent-platform-request-lifecycle.archify.json) | `/arch/lifecycle.html` |
+| 图 | 类型 | 控制台入口 |
+|---|---|---|
+| [feishu-agent-platform-runtime.archify.json](diagrams/feishu-agent-platform-runtime.archify.json) | architecture | `/arch/runtime.html` |
+| [feishu-agent-platform-request-lifecycle.archify.json](diagrams/feishu-agent-platform-request-lifecycle.archify.json) | workflow (schema v2) | `/arch/lifecycle.html` |
+
+改图流程：编辑 `.archify.json` → `archify validate <type> <json> --quality showcase`
+→ `archify deliver <type> <json> <html>`。**type 必须与 `diagram_type` 一致**：
+源里写 `workflow` 而按 `architecture` 校验会报一堆 `additionalProperties`，
+看着像源坏了，其实是类型传错。
 
 ## 验收清单
 

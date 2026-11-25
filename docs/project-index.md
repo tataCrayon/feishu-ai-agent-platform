@@ -280,6 +280,8 @@ bot 侧 `lifecycle.py` 的 spawn/健康轮询/关停回收已有 Windows 与 POS
   「不实测就会选错」的数字。**新功能不要再往 `docs/design/` 加文档**：取舍写 ADR，
   流程与不变量写 `docs/features/`，接口与数据模型以代码为事实源
 - 结构图：`docs/diagrams/` 只放两份 `.archify.json` 源 + 两份 `.html` 生成物，
-  源是单源、html 是 archify deliver 的产物；不要往里放截图或 visual-check 产物
+  源是单源、html 是 archify deliver 的产物；**validate/deliver 的 type 必须与源里
+  `diagram_type` 一致**（runtime=architecture，lifecycle=workflow），传错会报
+  `additionalProperties`，别误判成源坏了。不要往里放截图或 visual-check 产物
 - 飞书平台配置：`docs/feishu-platform-setup.md`
 - 业务知识库：`.notes/`（foundation/patterns/ai-consulting）
